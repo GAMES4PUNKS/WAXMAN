@@ -371,7 +371,7 @@ window.onload = function() {
   const timerOverSound = document.getElementById("timerOverSound");
   const gameStartSound = document.getElementById("gameStartSound");
   const pillSound = document.getElementById("pillSound");
-  const eatenSound = document.getElementById("eatenSound"); // NEW: Eaten Sound
+  const eatenSound = document.getElementById("eatenSound");
 
   // Set up touch/desktop UI visibility
   const statusBarCombined = document.getElementById("statusBarCombined");
@@ -569,7 +569,7 @@ window.onload = function() {
     return false;
   }
   
-  /** Ghost AI: Always Chase Bradman, or Flee when Scared. */
+  /** Ghost AI: Always Chase Bradman, or Flee when Scared (FIXED for corner issue). */
   function moveGhosts() {
     ghosts.forEach(ghost => {
         // Simple speed control
@@ -578,46 +578,48 @@ window.onload = function() {
         let dx_target = Math.sign(bradman.x - ghost.x);
         let dy_target = Math.sign(bradman.y - ghost.y);
 
-        // If scared, reverse the target direction (flee)
-        if (ghost.scared) {
-            dx_target *= -1;
-            dy_target *= -1;
-        }
+        // Determine if target is to flee or chase
+        let targetX_dir = ghost.scared ? -dx_target : dx_target;
+        let targetY_dir = ghost.scared ? -dy_target : dy_target;
         
         let potentialMoves = [];
         
-        // Prioritize moves that close/increase the distance
-        if (Math.random() > 0.5) {
-            // Try X movement first
-            if (map[ghost.y] && map[ghost.y][ghost.x + dx_target] !== 0) {
-                potentialMoves.push({x: dx_target, y: 0});
-            }
-            if (map[ghost.y + dy_target] && map[ghost.y + dy_target][ghost.x] !== 0) {
-                potentialMoves.push({x: 0, y: dy_target});
-            }
-        } else {
-            // Try Y movement first
-            if (map[ghost.y + dy_target] && map[ghost.y + dy_target][ghost.x] !== 0) {
-                potentialMoves.push({x: 0, y: dy_target});
-            }
-            if (map[ghost.y] && map[ghost.y][ghost.x + dx_target] !== 0) {
-                potentialMoves.push({x: dx_target, y: 0});
-            }
+        // 1. Calculate Priority Moves (Chasing/Fleeing direction)
+        let priorityMoves = [];
+        if (map[ghost.y] && map[ghost.y][ghost.x + targetX_dir] !== 0) {
+            priorityMoves.push({x: targetX_dir, y: 0});
+        }
+        if (map[ghost.y + targetY_dir] && map[ghost.y + targetY_dir][ghost.x] !== 0) {
+            priorityMoves.push({x: 0, y: targetY_dir});
         }
         
-        // Filter out redundant and reverse moves, and moves into walls (0)
-        const validMoves = potentialMoves.filter(dir => 
-            (dir.x !== -ghost.dx || dir.y !== -ghost.dy) && // Allow any move but direct 180 reversal
+        // 2. Calculate Secondary Moves (Perpendicular and other valid moves)
+        const secondaryMoves = [
+            {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
+        ].filter(dir => 
+            // Avoid direct 180 reversal
+            (dir.x !== -ghost.dx || dir.y !== -ghost.dy) && 
+            // Ensure move is valid (not into a wall)
             map[ghost.y + dir.y] && map[ghost.y + dir.y][ghost.x + dir.x] !== 0
         );
 
-        if (validMoves.length > 0) {
-            const move = validMoves[Math.floor(Math.random() * validMoves.length)]; // Choose one randomly
+        // Combine moves: priority first, then secondary
+        potentialMoves = [...priorityMoves, ...secondaryMoves]
+            // Deduplicate
+            .filter((v, i, a) => a.findIndex(t => (t.x === v.x && t.y === v.y)) === i)
+            // If SCARRED, highly randomize the selection to prevent corner lock
+            .sort(() => ghost.scared ? Math.random() - 0.5 : 0);
+
+        // Choose the best move
+        if (potentialMoves.length > 0) {
+            const move = potentialMoves[0]; 
             ghost.x += move.x;
             ghost.y += move.y;
             ghost.dx = move.x;
             ghost.dy = move.y;
         }
+        // If no move is available (shouldn't happen in open arena unless in perimeter corner)
+        // the ghost maintains its last position/direction (dx/dy)
     });
   }
 
@@ -683,10 +685,10 @@ window.onload = function() {
         if (bradman.x === ghost.x && bradman.y === ghost.y) {
             if (ghost.scared) {
                 // EAT GHOST
-                playSound(eatenSound); // NEW: Play eaten sound
+                playSound(eatenSound); // Play eaten sound
                 score += 200;
                 
-                // Respawn ghost at center (and it remains SCARY due to the shared timer)
+                // Respawn ghost at center and keep SCARY status
                 ghost.x = ghost.respawnX;
                 ghost.y = ghost.respawnY;
                 
@@ -807,6 +809,7 @@ window.onload = function() {
         stopSound(timerOverSound);
         stopSound(deadSound);
         stopSound(eatenSound);
+        stopSound(pillSound);
 
         // Play game start sound
         playSound(gameStartSound);

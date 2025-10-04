@@ -324,6 +324,7 @@
 <audio id="timerOverSound" src="timerover.mp3" preload="auto"></audio>
 <audio id="gameStartSound" src="gamestart.mp3" preload="auto"></audio>
 <audio id="pillSound" src="pill.mp3" preload="auto"></audio>
+<audio id="eatenSound" src="eaten.mp3" preload="auto"></audio>
 
 
 <script>
@@ -370,6 +371,7 @@ window.onload = function() {
   const timerOverSound = document.getElementById("timerOverSound");
   const gameStartSound = document.getElementById("gameStartSound");
   const pillSound = document.getElementById("pillSound");
+  const eatenSound = document.getElementById("eatenSound"); // NEW: Eaten Sound
 
   // Set up touch/desktop UI visibility
   const statusBarCombined = document.getElementById("statusBarCombined");
@@ -666,10 +668,9 @@ window.onload = function() {
         
         // ACTIVATE SCARY MODE
         ghosts.forEach(g => {
-            if (!g.scared) {
-              g.scared = true;
-              g.scaredTimer = SCARY_TIME;
-            }
+            // Reset existing ghosts' timers or activate new ones
+            g.scared = true;
+            g.scaredTimer = SCARY_TIME;
         });
         
         // Start the main power pellet timer sound
@@ -682,14 +683,12 @@ window.onload = function() {
         if (bradman.x === ghost.x && bradman.y === ghost.y) {
             if (ghost.scared) {
                 // EAT GHOST
+                playSound(eatenSound); // NEW: Play eaten sound
                 score += 200;
                 
-                // CRUCIAL FIX: Respawn ghost at center and keep SCARY status if timer is still running
+                // Respawn ghost at center (and it remains SCARY due to the shared timer)
                 ghost.x = ghost.respawnX;
                 ghost.y = ghost.respawnY;
-                
-                // If timer is NOT zero, keep scared status. 
-                // If timer IS zero, the next loop cycle will revert scared=false and stop sound.
                 
             } else {
                 // GHOST EATS BRADMAN
@@ -807,6 +806,7 @@ window.onload = function() {
         stopSound(timerSound);
         stopSound(timerOverSound);
         stopSound(deadSound);
+        stopSound(eatenSound);
 
         // Play game start sound
         playSound(gameStartSound);

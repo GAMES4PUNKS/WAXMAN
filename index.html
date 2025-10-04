@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BRADMAN – The Infinite Chase</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+  <style>
+    /* ---------------------------------------------------------------------- */
+    /* BASE TEMPLATE STYLES - MAINTAINED FROM SPACERUN3008 */
+    /* ---------------------------------------------------------------------- */
+    body {
+      margin: 0;
+      /* Use the specified background image */
+      background: url('bgobe.jpg') no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Orbitron', sans-serif;
+      color: white;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    #main-content {
+      width: 100%;
+    }
+    canvas {
+      width: 90vmin;
+      height: 90vmin;
+      max-width: 90vw;
+      max-height: 90vw;
+      /* Use the specified canvas background GIF */
+      background: url('moshed-2021-11-29-0-39-58.gif') center/cover no-repeat;
+      display: block;
+      box-shadow: 0 0 20px #ffff00; /* Bradman Yellow for the glow */
+      margin: 1rem auto;
+      outline: none;
+      position: relative;
+      z-index: 1;
+      /* Ensure text rendering (emojis) is crisp on the canvas */
+      image-rendering: crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+    }
+    /* Status bar split for touch */
+    #statusBarRow1,
+    #statusBarRow2 {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.7em;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      white-space: nowrap;
+      width: 100%;
+    }
+    #statusBarRow1 {
+      font-size: 1.1rem;
+      margin-bottom: 0.15em;
+    }
+    #statusBarRow2 {
+      font-size: 1.1rem;
+      margin-bottom: 0.6em;
+    }
+    /* Desktop default: show combined bar, hide split bars */
+    #statusBarCombined {
+      display: flex;
+      font-size: 1rem;
+      color: white;
+      margin-bottom: 0.7em;
+      z-index: 3;
+      justify-content: center;
+      align-items: center;
+      gap: 0.7em;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      white-space: nowrap;
+      width: 100%;
+    }
+    .show-dpad #statusBarCombined { display: none; }
+    .show-dpad #statusBarRow1, .show-dpad #statusBarRow2 { display: flex; }
+    #statusBarRow1, #statusBarRow2 { display: none; }
+    /* Buttons and text styles (shared for both modes) */
+    #statusBarCombined span, #statusBarRow1 span, #statusBarRow2 span {
+      font-size: 1.1rem;
+      margin: 0 0.6em;
+      white-space: nowrap;
+    }
+    /* BRADMAN SPECIFIC UI COLORS */
+    #levelDisplay, #levelDisplayTouch {
+        color: #00ff00; /* Level green */
+        font-weight: bold;
+    }
+    #highScoreDisplay,
+    #highScoreDisplayTouch {
+      color: #a0ffd0;
+    }
+    #statusBarCombined button, #statusBarRow1 button, #statusBarRow2 button,
+    #statusBarCombined select, #statusBarRow1 select, #statusBarRow2 select {
+      background: none;
+      font-size: 1rem;
+      font-family: 'Orbitron', sans-serif;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      animation: pulse 1.5s infinite ease-in-out; 
+      margin: 0 0.3rem;
+      outline: none;
+    }
+    #statusBarCombined select, #statusBarRow2 select {
+      background: #181818;
+      color: white;
+      border-radius: 6px;
+      border: 1px solid #ffff00; /* Bradman Yellow border */
+      padding: 0.1rem 0.5rem;
+      font-family: 'Orbitron', sans-serif;
+      margin-left: 0.5rem;
+      font-size: 1rem;
+      outline: none;
+      cursor: pointer;
+    }
+    a.leaderboard-link {
+      color: white;
+      text-decoration: underline;
+      font-size: 1rem;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.1; }
+      100% { opacity: 1; }
+    }
+    #gameStatusLine {
+      display: none;
+      margin-top: 0.5rem;
+      font-size: 1rem;
+      color: white;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 4;
+      position: relative;
+    }
+    #finalScore {
+      margin: 0 0.3rem;
+      color: white;
+    }
+    #loginPopup {
+      display: none;
+      position: fixed;
+      top: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      border: 1px solid #888;
+      padding: 1rem;
+      border-radius: 10px;
+      color: white;
+      z-index: 20;
+      min-width: 250px;
+    }
+    #loginPopup button {
+      margin: 0.5rem;
+      font-size: 1rem;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #closeLoginPopup {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      font-size: 18px;
+      color: white;
+      cursor: pointer;
+    }
+    #overlay {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border-radius: 16px;
+      font-size: 2rem;
+      z-index: 5;
+      padding: 2rem 3rem;
+      pointer-events: none;
+    }
+    /* D-pad grid - only on touch devices */
+    #dpad-area {
+      display: none;
+      width: 100%;
+      justify-content: center;
+      align-items: center;
+      margin: 2em 0 1em 0;
+    }
+    .show-dpad #dpad-area {
+      display: flex;
+    }
+    #dpad-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 1.1em;
+    }
+    .dpad-btn {
+      width: 94px;
+      height: 94px;
+      background: rgba(32,32,32,0.7);
+      border: 3px solid #ffff00; /* Bradman Yellow */
+      color: #fff;
+      font-size: 2.7rem;
+      border-radius: 24px;
+      cursor: pointer;
+      box-shadow: 0 0 18px #ffff0080;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+      touch-action: manipulation;
+      transition: background 0.15s, border 0.15s;
+      opacity: 0.97;
+      outline: none;
+      backdrop-filter: blur(2px);
+    }
+    .dpad-btn:active {
+      background: #ffff00cc; /* Yellow active color */
+      border: 3px solid #fff;
+      opacity: 1;
+    }
+    @media (max-width: 650px) {
+      .dpad-btn {
+        width: 64px;
+        height: 64px;
+        font-size: 1.52rem;
+      }
+      #dpad-area { margin: 1.2em 0 0.8em 0; }
+      #statusBarCombined, #statusBarRow1, #statusBarRow2 { font-size: 1.0rem; }
+    }
+    .visually-hidden {
+      position: absolute !important;
+      height: 1px; width: 1px;
+      overflow: hidden;
+      clip: rect(1px 1px 1px 1px);
+      clip: rect(1px, 1px, 1px, 1px);
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+<div id="main-content">
+  <div style="position:relative;">
+    <h1>BRADMAN: The Infinite Chase</h1>
+    <canvas id="gameCanvas" tabindex="0" aria-label="Bradman Pac-Man inspired game"></canvas>
+    <div id="overlay"></div>
+  </div>
+  
+  <div id="statusBarCombined">
+    <span id="scoreDisplay">Score: 0</span>
+    <span id="levelDisplay">Level: 1</span>
+    <span id="highScoreDisplay">High Score: 0</span>
+    <button id="pauseBtn" aria-pressed="false" title="Pause/Resume">⏸️</button>
+    <button id="muteBtn" aria-pressed="false" title="Mute/Unmute SFX">🔊</button>
+    <label for="speedSelect" class="visually-hidden">Game Speed</label>
+    <select id="speedSelect" title="Game Speed">
+      <option value="250">Normal</option>
+      <option value="120">Fast</option>
+      <option value="60">Turbo</option>
+    </select>
+    <button id="toggleRadio" aria-pressed="false">Radio ON</button>
+    <button id="loginBtn">LOG IN</button>
+  </div>
+  <div id="statusBarRow1">
+    <span id="scoreDisplayTouch">Score: 0</span>
+    <span id="levelDisplayTouch">Level: 1</span>
+    <button id="pauseBtnTouch" aria-pressed="false" title="Pause/Resume">⏸️</button>
+  </div>
+  <div id="statusBarRow2">
+    <button id="muteBtnTouch" aria-pressed="false" title="Mute/Unmute SFX">🔊</button>
+    <label for="speedSelectTouch" class="visually-hidden">Game Speed</label>
+    <select id="speedSelectTouch" title="Game Speed">
+      <option value="250">Normal</option>
+      <option value="120">Fast</option>
+      <option value="60">Turbo</option>
+    </select>
+    <button id="toggleRadioTouch" aria-pressed="false">Radio ON</button>
+    <button id="loginBtnTouch">LOG IN</button>
+  </div>
+  <div id="gameStatusLine" aria-live="polite">
+    <span>Game over.</span>
+    <span id="finalScore">Score: 0</span>
+    <button id="restartBtn">Play Again</button>
+    <a href="https://games4punks.github.io/spacerun3008/leaderboard.html" class="leaderboard-link" target="_blank" rel="noopener noreferrer">View Leaderboard</a>
+  </div>
+  <div id="loginPopup" aria-modal="true" role="dialog">
+    <span id="closeLoginPopup" tabindex="0" aria-label="Close login popup">&times;</span>
+    <p>Select WAX Wallet</p>
+    <button onclick="alert('Login with Anchor')">Anchor</button>
+    <button onclick="alert('Login with MyCloud')">MyCloud</button>
+    <button onclick="alert('Login with Wombat')">Wombat</button>
+  </div>
+  <div id="dpad-area">
+    <div id="dpad-grid">
+      <button id="leftBtn"  class="dpad-btn" aria-label="Move Left">←</button>
+      <button id="upBtn"    class="dpad-btn" aria-label="Move Up">↑</button>
+      <button id="rightBtn" class="dpad-btn" aria-label="Move Right">→</button>
+      <button id="downBtn"  class="dpad-btn" aria-label="Move Down">↓</button>
+    </div>
+  </div>
+</div>
+<audio id="radioStream" loop>
+  <source src="http://stream.radiojar.com/2qm1fc5kb" type="audio/mpeg">
+</audio>
+<audio id="explosionSound" src="explosion.mp3"></audio>
+<audio id="crashSound" src="crash.mp3"></audio>
+<audio id="spaceshipSound" src="spaceship.mp3"></audio>
+<audio id="alienSound" src="alien.mp3"></audio>
+<audio id="rocketSound" src="rocket.mp3"></audio>
+<audio id="satelliteSound" src="satellite.mp3"></audio>
+<audio id="spacemanSound" src="spaceman.mp3"></audio>
+
+<script>
+window.onload = function() {
+  function isTouchDevice() {
+    return (
+      'ontouchstart' in window ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+      (navigator.msMaxTouchPoints && navigator.msMaxTouchPoints > 0)
+    );
+  }
+  
+  // --- Game Constants & Emojis ---
+  const BRADMAN_EMOJI = '🟡';
+  const GHOST_EMOJIS = ['👻', '😈', '👽'];
+  const DOT_EMOJI = '⭐';
+  const WALL_EMOJI = '⬛️'; // Black square for walls
+  const TILE_SIZE = 20; 
+  const GRID_COLS = 20;
+  const GRID_ROWS = 20;
+
+  // --- HTML Elements & Setup ---
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = GRID_COLS * TILE_SIZE;
+  canvas.height = GRID_ROWS * TILE_SIZE;
+
+  // UI elements from the base template
+  const gameStatusLine = document.getElementById("gameStatusLine");
+  const finalScoreSpan = document.getElementById("finalScore");
+  const radio = document.getElementById("radioStream");
+  const overlay = document.getElementById("overlay");
+  const loginPopup = document.getElementById("loginPopup");
+  const crashSound = document.getElementById("crashSound");
+  // Set up touch/desktop UI visibility
+  const statusBarCombined = document.getElementById("statusBarCombined");
+  const statusBarRow1 = document.getElementById("statusBarRow1");
+  const statusBarRow2 = document.getElementById("statusBarRow2");
+  if (isTouchDevice()) {
+    document.body.classList.add('show-dpad');
+    statusBarCombined.style.display = "none";
+    statusBarRow1.style.display = "flex";
+    statusBarRow2.style.display = "flex";
+  } else {
+    statusBarCombined.style.display = "flex";
+    statusBarRow1.style.display = "none";
+    statusBarRow2.style.display = "none";
+  }
+
+  // Helper to get the correct UI element (touch or desktop version)
+  function getEl(id) {
+    if (isTouchDevice()) {
+      switch (id) {
+        case "scoreDisplay": return document.getElementById("scoreDisplayTouch");
+        case "levelDisplay": return document.getElementById("levelDisplayTouch");
+        case "highScoreDisplay": return document.getElementById("highScoreDisplayTouch");
+        case "pauseBtn": return document.getElementById("pauseBtnTouch");
+        case "muteBtn": return document.getElementById("muteBtnTouch");
+        case "speedSelect": return document.getElementById("speedSelectTouch");
+        case "toggleRadio": return document.getElementById("toggleRadioTouch");
+        case "loginBtn": return document.getElementById("loginBtnTouch");
+      }
+    }
+    return document.getElementById(id);
+  }
+
+  // --- Game State ---
+  let level = 1;
+  let score = 0;
+  let highScore = Number(localStorage.getItem('bradman_highscore') || "0");
+  let bradman = { x: 1, y: 1, dx: 0, dy: 0, next_dx: 0, next_dy: 0 };
+  let ghosts = [];
+  let map = []; // 0: Wall, 1: Path, 2: Dot, 3: Power Pellet
+  let started = false;
+  let paused = false;
+  let gameInterval, speed = 250; 
+  let gameOverFlag = false;
+  let sfxMuted = false;
+  let lastOverlayMsg = "";
+
+  // --- Pac-Man Specific Functions ---
+  
+  /** Generates a simple, unique maze map for each level. */
+  function generateMap(currentLevel) {
+    let newMap = [];
+    // Wall chance increases by 1% per level, maxing at 15%
+    const wallChance = 0.05 + (Math.min(currentLevel - 1, 10) * 0.01);
+    
+    // Initialize map
+    for (let r = 0; r < GRID_ROWS; r++) {
+        newMap[r] = new Array(GRID_COLS).fill(0); // All walls initially
+    }
+    
+    // Recursive Backtracker Maze Generation (simplified)
+    function carve(cx, cy) {
+        newMap[cy][cx] = 2; // Mark as path/dot
+        
+        // Randomly shuffle directions
+        const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
+
+        for (const [dx, dy] of directions) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+
+            if (ny > 0 && ny < GRID_ROWS - 1 && nx > 0 && nx < GRID_COLS - 1 && newMap[ny][nx] === 0) {
+                // Carve a path through the wall
+                newMap[cy + dy / 2][cx + dx / 2] = 2;
+                carve(nx, ny);
+            }
+        }
+    }
+
+    // Start carving from a random internal cell, ensuring even coordinates
+    carve(1 + (Math.floor(Math.random() * (GRID_COLS / 2 - 1)) * 2), 
+          1 + (Math.floor(Math.random() * (GRID_ROWS / 2 - 1)) * 2));
+
+    // Ensure outer boundary is all walls (0) and inner path cells are dots (2)
+    for (let r = 0; r < GRID_ROWS; r++) {
+      for (let c = 0; c < GRID_COLS; c++) {
+        if (r === 0 || r === GRID_ROWS - 1 || c === 0 || c === GRID_COLS - 1) {
+          newMap[r][c] = 0;
+        } else if (newMap[r][c] === 1) {
+          newMap[r][c] = 2; // Make all paths dots
+        }
+      }
+    }
+
+    // Place a Power Pellet (3) in the corners
+    newMap[1][GRID_COLS - 2] = 3;
+    newMap[GRID_ROWS - 2][1] = 3;
+    newMap[1][1] = 1; // Clear Bradman start
+    
+    return newMap;
+  }
+
+  /** Sets up the ghosts based on the current level, increasing speed. */
+  function setupGhosts(currentLevel) {
+    ghosts = [];
+    const baseGhosts = 2;
+    // Add one ghost every two levels, maxing out at 6
+    const numGhosts = Math.min(baseGhosts + Math.floor((currentLevel - 1) / 2), 6); 
+    // Ghost speed factor increases by 0.1 per level
+    const ghostSpeedFactor = 1 + (currentLevel * 0.1); 
+
+    for (let i = 0; i < numGhosts; i++) {
+        // Initial positions near center/corners
+        let gx = (GRID_COLS - 2) - (i % 3);
+        let gy = 1 + (i % 3);
+
+        ghosts.push({
+            x: gx,
+            y: gy,
+            speed: ghostSpeedFactor,
+            emoji: GHOST_EMOJIS[i % GHOST_EMOJIS.length],
+            scared: false,
+            scaredTimer: 0,
+            // Directional state for the simple AI
+            dx: 0, 
+            dy: 0 
+        });
+    }
+  }
+
+  /** Moves Bradman based on the pending direction, checking for walls. */
+  function moveBradman() {
+    // Attempt to align direction with next_direction
+    const newX_tentative = bradman.x + bradman.next_dx;
+    const newY_tentative = bradman.y + bradman.next_dy;
+    
+    // Check if the next intended move is a path (1, 2, or 3)
+    if (newY_tentative >= 0 && newY_tentative < GRID_ROWS && 
+        newX_tentative >= 0 && newX_tentative < GRID_COLS &&
+        map[newY_tentative][newX_tentative] !== 0) 
+    {
+        bradman.dx = bradman.next_dx;
+        bradman.dy = bradman.next_dy;
+    }
+    
+    // Now move in the current direction (which may be the old one)
+    const targetX = bradman.x + bradman.dx;
+    const targetY = bradman.y + bradman.dy;
+
+    if (targetY >= 0 && targetY < GRID_ROWS && 
+        targetX >= 0 && targetX < GRID_COLS &&
+        map[targetY][targetX] !== 0) 
+    {
+        bradman.x = targetX;
+        bradman.y = targetY;
+        return true;
+    }
+    // Cannot move, so stop movement
+    bradman.dx = 0;
+    bradman.dy = 0;
+    return false;
+  }
+  
+  /** Simple ghost AI: Tries to move towards Bradman, checking for walls. */
+  function moveGhosts() {
+    ghosts.forEach(ghost => {
+        // Only move on certain loops based on speed factor (for smoother scaling)
+        if (Math.random() > (1 / ghost.speed)) return;
+        
+        const dx_target = Math.sign(bradman.x - ghost.x);
+        const dy_target = Math.sign(bradman.y - ghost.y);
+
+        let potentialDirs = [];
+        if (dx_target !== 0 && map[ghost.y][ghost.x + dx_target] !== 0) {
+            potentialDirs.push({x: dx_target, y: 0});
+        }
+        if (dy_target !== 0 && map[ghost.y + dy_target][ghost.x] !== 0) {
+            potentialDirs.push({x: 0, y: dy_target});
+        }
+        
+        // If the ghost is scared, it favors directions *away* from Bradman
+        if (ghost.scared) {
+            potentialDirs = [];
+            if (dx_target !== 0 && map[ghost.y][ghost.x - dx_target] !== 0) {
+                potentialDirs.push({x: -dx_target, y: 0});
+            }
+            if (dy_target !== 0 && map[ghost.y - dy_target][ghost.x] !== 0) {
+                potentialDirs.push({x: 0, y: -dy_target});
+            }
+        }
+        
+        // Always add perpendicular options to avoid getting stuck
+        if (map[ghost.y][ghost.x + 1] !== 0 && ghost.dx !== -1) potentialDirs.push({x: 1, y: 0});
+        if (map[ghost.y][ghost.x - 1] !== 0 && ghost.dx !== 1) potentialDirs.push({x: -1, y: 0});
+        if (map[ghost.y + 1][ghost.x] !== 0 && ghost.dy !== -1) potentialDirs.push({x: 0, y: 1});
+        if (map[ghost.y - 1][ghost.x] !== 0 && ghost.dy !== 1) potentialDirs.push({x: 0, y: -1});
+        
+        // Filter out illegal and reverse moves, and choose one randomly
+        const validMoves = potentialDirs.filter(dir => 
+          (dir.x !== -ghost.dx || dir.x === 0) && (dir.y !== -ghost.dy || dir.y === 0) && map[ghost.y + dir.y][ghost.x + dir.x] !== 0
+        ).sort(() => Math.random() - 0.5);
+
+        if (validMoves.length > 0) {
+            const move = validMoves[0];
+            ghost.x += move.x;
+            ghost.y += move.y;
+            ghost.dx = move.x;
+            ghost.dy = move.y;
+        }
+    });
+  }
+
+
+  // --- Game Loop and Flow ---
+
+  function BradmanGameLoop() {
+    if (!started || gameOverFlag || paused) return;
+
+    // 1. Bradman Movement
+    moveBradman();
+
+    // 2. Ghost Movement & Scared Timer Update (update every frame for smooth timing)
+    moveGhosts(); 
+    ghosts.forEach(ghost => {
+        if (ghost.scaredTimer > 0) {
+            ghost.scaredTimer--;
+            if (ghost.scaredTimer === 0) ghost.scared = false;
+        }
+    });
+
+    // 3. Collect Dots/Pellets
+    let tileType = map[bradman.y][bradman.x];
+    if (tileType === 2) {
+        map[bradman.y][bradman.x] = 1; // Clear dot
+        score += 10;
+    } else if (tileType === 3) { // Power Pellet
+        map[bradman.y][bradman.x] = 1; // Clear pellet
+        score += 50;
+        // Scare ghosts!
+        ghosts.forEach(g => {
+            g.scared = true;
+            g.scaredTimer = 200; // ~20 seconds at 10 updates/sec
+        });
+    }
+
+    // 4. Ghost Interactions
+    ghosts.forEach((ghost) => {
+        // Check collision (Bradman and Ghost are on the same tile)
+        if (bradman.x === ghost.x && bradman.y === ghost.y) {
+            if (ghost.scared) {
+                // EAT GHOST!
+                score += 200;
+                // Move ghost back to a fixed starting point (respawn)
+                ghost.x = GRID_COLS - 2;
+                ghost.y = 1;
+                ghost.scared = false;
+                ghost.scaredTimer = 0;
+            } else {
+                // GHOST EATS BRADMAN!
+                if (!sfxMuted) { crashSound.currentTime = 0; crashSound.play(); }
+                gameOver();
+                return;
+            }
+        }
+    });
+    
+    // 5. Check Level Completion
+    let remainingDots = map.flat().filter(t => t === 2 || t === 3).length;
+    if (remainingDots === 0) {
+        levelUp();
+        return;
+    }
+
+    // 6. Update HUD and Draw
+    updateHud();
+    draw();
+  }
+
+  /** Draws the game state to the canvas using emojis. */
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.font = `${TILE_SIZE}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // 1. Draw the Map (Walls, Dots, Pellets)
+    for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+            const screenX = c * TILE_SIZE;
+            const screenY = r * TILE_SIZE;
+            
+            ctx.save();
+            if (map[r][c] === 0) { // Wall
+                ctx.fillText(WALL_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
+            } else if (map[r][c] === 2) { // Dot
+                ctx.font = `${TILE_SIZE * 0.7}px sans-serif`;
+                ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
+            } else if (map[r][c] === 3) { // Power Pellet (Make it flash)
+                ctx.font = `${TILE_SIZE}px sans-serif`;
+                ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 150));
+                ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
+            }
+            ctx.restore();
+        }
+    }
+
+    // 2. Draw Bradman
+    ctx.font = `${TILE_SIZE}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(BRADMAN_EMOJI, 
+                 (bradman.x + 0.5) * TILE_SIZE, 
+                 (bradman.y + 0.5) * TILE_SIZE);
+
+    // 3. Draw Ghosts
+    ghosts.forEach(ghost => {
+        let emoji = ghost.emoji;
+        // Use a generic scary emoji when they are scared
+        if (ghost.scared) {
+            emoji = '😨'; 
+            // Flash a warning emoji when time is low
+            if (ghost.scaredTimer < 50 && (Math.floor(Date.now() / 150) % 2 === 0)) {
+                emoji = ' RUN! '; 
+                ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
+            } else {
+                 ctx.font = `${TILE_SIZE}px sans-serif`;
+            }
+        } else {
+            ctx.font = `${TILE_SIZE}px sans-serif`;
+        }
+
+        ctx.fillText(emoji, 
+                     (ghost.x + 0.5) * TILE_SIZE, 
+                     (ghost.y + 0.5) * TILE_SIZE);
+    });
+  }
+
+  function levelUp() {
+    alert(`Level ${level} Complete! Getting harder now...`);
+    level++;
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('bradman_highscore', highScore);
+    }
+    
+    // Reset Bradman and set up new map/ghosts
+    bradman.x = 1;
+    bradman.y = 1;
+    bradman.dx = 0;
+    bradman.dy = 0;
+    bradman.next_dx = 0;
+    bradman.next_dy = 0;
+    
+    map = generateMap(level);
+    setupGhosts(level);
+    updateHud();
+  }
+
+  function resetGame() {
+    level = 1;
+    score = 0;
+    bradman = { x: 1, y: 1, dx: 0, dy: 0, next_dx: 0, next_dy: 0 };
+    gameOverFlag = false;
+    started = false;
+
+    updateHud();
+    gameStatusLine.style.display = "none";
+    if (isTouchDevice()) {
+      statusBarRow1.style.display = "flex";
+      statusBarRow2.style.display = "flex";
+    } else {
+      statusBarCombined.style.display = "flex";
+    }
+    hideOverlay();
+    clearInterval(gameInterval);
+    
+    map = generateMap(level);
+    setupGhosts(level);
+    
+    // Set game speed from selected option
+    const currentSpeedOption = getEl("speedSelect").value;
+    speed = Number(currentSpeedOption);
+    gameInterval = setInterval(BradmanGameLoop, speed);
+    
+    draw();
+    setTimeout(() => canvas.focus(), 100);
+  }
+
+  function gameOver() {
+    clearInterval(gameInterval);
+    gameOverFlag = true;
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('bradman_highscore', highScore);
+    }
+    
+    finalScoreSpan.textContent = `Score: ${score} (Level ${level})`;
+    updateHud();
+    
+    if (isTouchDevice()) {
+      statusBarRow1.style.display = "none";
+      statusBarRow2.style.display = "none";
+    } else {
+      statusBarCombined.style.display = "none";
+    }
+    gameStatusLine.style.display = "flex";
+    showOverlay("GAME OVER");
+    setTimeout(hideOverlay, 1800);
+  }
+
+  // --- UI/Control Handlers (Retained from base template) ---
+
+  function updateHud() {
+    const scoreVal = "Score: " + score;
+    const levelVal = "Level: " + level;
+    const highVal = "High Score: " + highScore;
+
+    getEl("scoreDisplay").textContent = scoreVal;
+    getEl("levelDisplay").textContent = levelVal;
+    getEl("highScoreDisplay").textContent = highVal;
+  }
+
+  function showOverlay(msg) {
+    overlay.textContent = msg;
+    overlay.style.display = "block";
+    lastOverlayMsg = msg;
+  }
+  function hideOverlay() {
+    overlay.style.display = "none";
+    lastOverlayMsg = "";
+  }
+  
+  // Set direction for the *next* move
+  function setDirection(newDir) {
+    if (
+      (newDir.x !== -bradman.dx || bradman.dx === 0) &&
+      (newDir.y !== -bradman.dy || bradman.dy === 0)
+    ) {
+      bradman.next_dx = newDir.x;
+      bradman.next_dy = newDir.y;
+      started = true;
+      if (!paused && !gameOverFlag) hideOverlay();
+    }
+  }
+  
+  // Login popup logic
+  bindButton(getEl("loginBtn"), () => { loginPopup.style.display = "block"; });
+  document.getElementById("closeLoginPopup").onclick = () => { loginPopup.style.display = "none"; }
+  window.addEventListener('keydown', function(e) {
+    if (e.key === "Escape") loginPopup.style.display = "none";
+  });
+  
+  // Keyboard Input
+  document.addEventListener("keydown", e => {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(e.key)) {
+      e.preventDefault(); 
+      if (e.key === "ArrowUp" || e.key === "w") setDirection({ x: 0, y: -1 });
+      if (e.key === "ArrowDown" || e.key === "s") setDirection({ x: 0, y: 1 });
+      if (e.key === "ArrowLeft" || e.key === "a") setDirection({ x: -1, y: 0 });
+      if (e.key === "ArrowRight" || e.key === "d") setDirection({ x: 1, y: 0 });
+      canvas.focus();
+    }
+    if (e.key.toLowerCase() === "p") {
+      togglePause();
+    }
+    if (gameOverFlag && e.key === "Enter") {
+      resetGame();
+    }
+  });
+
+  // Touch Swipe Input (kept from original)
+  let touchStartX, touchStartY;
+  canvas.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  });
+  canvas.addEventListener('touchend', function(e) {
+    if (touchStartX === undefined || touchStartY === undefined) return;
+    let dx = e.changedTouches[0].clientX - touchStartX;
+    let dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 20) setDirection({ x: 1, y: 0 });
+      if (dx < -20) setDirection({ x: -1, y: 0 });
+    } else {
+      if (dy > 20) setDirection({ x: 0, y: 1 });
+      if (dy < -20) setDirection({ x: 0, y: -1 });
+    }
+    touchStartX = touchStartY = undefined;
+  });
+
+  // D-pad (touch) event bindings 
+  const upBtn = document.getElementById("upBtn");
+  const downBtn = document.getElementById("downBtn");
+  const leftBtn = document.getElementById("leftBtn");
+  const rightBtn = document.getElementById("rightBtn");
+  if(upBtn) upBtn.onclick = e => setDirection({ x: 0, y: -1 });
+  if(downBtn) downBtn.onclick = e => setDirection({ x: 0, y: 1 });
+  if(leftBtn) leftBtn.onclick = e => setDirection({ x: -1, y: 0 });
+  if(rightBtn) rightBtn.onclick = e => setDirection({ x: 1, y: 0 });
+  
+  // --- Button Handlers (Shared Logic) ---
+  
+  function bindButton(btn, clickFn) {
+    if (btn) btn.onclick = clickFn;
+  }
+  
+  function togglePause() {
+    if (gameOverFlag) return;
+    let pb = getEl("pauseBtn");
+    pb.innerHTML = paused ? "⏸️" : "▶️";
+    pb.setAttribute("aria-pressed", paused ? "false" : "true");
+    paused = !paused;
+    if (paused) {
+      showOverlay("PAUSED");
+      clearInterval(gameInterval); 
+    } else {
+      hideOverlay();
+      gameInterval = setInterval(BradmanGameLoop, speed); 
+    }
+  }
+  bindButton(getEl("pauseBtn"), togglePause);
+  document.getElementById("restartBtn").onclick = resetGame;
+  
+  // Mute
+  function toggleMute() {
+    sfxMuted = !sfxMuted;
+    const btns = [document.getElementById("muteBtn"), document.getElementById("muteBtnTouch")].filter(Boolean);
+    btns.forEach(btn => btn.textContent = sfxMuted ? "🔇" : "🔊");
+  }
+  bindButton(getEl("muteBtn"), toggleMute);
+  
+  // Speed
+  function changeSpeed(selectEl) {
+    speed = Number(selectEl.value);
+    clearInterval(gameInterval);
+    if (!paused && !gameOverFlag) {
+      gameInterval = setInterval(BradmanGameLoop, speed);
+    }
+    // Sync the other select element
+    document.getElementById("speedSelect").value = speed + '';
+    if(document.getElementById("speedSelectTouch"))
+        document.getElementById("speedSelectTouch").value = speed + '';
+  }
+  if(document.getElementById("speedSelect")) document.getElementById("speedSelect").onchange = (e) => changeSpeed(e.target);
+  if(document.getElementById("speedSelectTouch")) document.getElementById("speedSelectTouch").onchange = (e) => changeSpeed(e.target);
+
+  // Radio
+  function toggleRadio() {
+    const btns = [document.getElementById("toggleRadio"), document.getElementById("toggleRadioTouch")].filter(Boolean);
+    if (radio.paused) {
+      radio.play();
+      btns.forEach(btn => btn.textContent = "Radio OFF");
+    } else {
+      radio.pause();
+      btns.forEach(btn => btn.textContent = "Radio ON");
+    }
+  }
+  bindButton(getEl("toggleRadio"), toggleRadio);
+  
+  // Initial setup and start
+  canvas.onclick = () => canvas.focus();
+  function resizeCanvas() {
+    const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+    canvas.style.width = size + "px";
+    canvas.style.height = size + "px";
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+  
+  window.addEventListener('focus', () => {
+    if (paused && lastOverlayMsg !== "PAUSED") showOverlay("PAUSED");
+  });
+  
+  updateHud();
+  resetGame();
+}
+</script>
+</body>
+</html>

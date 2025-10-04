@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BRADMAN – The Infinite Chase</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght=500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
   <style>
     /* ---------------------------------------------------------------------- */
     /* BASE TEMPLATE STYLES - MAINTAINED FROM SPACERUN3008 */
@@ -42,7 +42,6 @@
       image-rendering: crisp-edges;
       image-rendering: -webkit-optimize-contrast;
     }
-    /* Maze Name Display - REMOVED FOR SCREEN FIT */
     /* Status bar split for touch */
     #statusBarRow1,
     #statusBarRow2 {
@@ -347,6 +346,8 @@ window.onload = function() {
   const GRID_ROWS = 30;
   // Dot is removed if >= 5 surrounding walls (max 8 possible)
   const WALL_SURROUND_THRESHOLD = 5; 
+  // Wall segment is converted to path if it has 3 or fewer wall neighbors
+  const WALL_CLEANUP_THRESHOLD = 3; 
 
   // --- HTML Elements & Setup (Skipping repeated UI logic) ---
   const canvas = document.getElementById("gameCanvas");
@@ -430,6 +431,26 @@ window.onload = function() {
       return wallCount;
   }
 
+  /** Gets the count of PATH/DOT cells (non-wall) surrounding a cell. Used for wall cleanup. */
+  function getSurroundingPathCount(r, c, currentMap) {
+      let pathCount = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const nr = r + dr;
+              const nc = c + dc;
+
+              if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
+                  // Count path (1), dot (2), or pellet (3)
+                  if (currentMap[nr][nc] !== 0) {
+                      pathCount++;
+                  }
+              }
+          }
+      }
+      return pathCount;
+  }
+
   /** Generates a unique maze map with a guaranteed clear outer loop and usable inner maze. */
   function generateMap(currentLevel) {
     let newMap = [];
@@ -446,7 +467,6 @@ window.onload = function() {
     }
 
     // CRITICAL FIX: Clear the outer path (row/col 1 to N-2) to be dots (2)
-    // This creates the safe, clear running lane, ensuring no double-blocks in this ring.
     for (let i = 1; i < GRID_COLS - 1; i++) {
         newMap[1][i] = 2; // Top
         newMap[GRID_ROWS - 2][i] = 2; // Bottom
@@ -506,6 +526,25 @@ window.onload = function() {
         }
     }
 
+    // --- POST GENERATION CLEANUP (FIXES DOUBLE WALLS) ---
+    // If a wall cell has too few neighbors that are ALSO walls, it's a floating segment or part of a double wall.
+    // We convert it to a path to join the maze.
+    for (let r = 2; r < GRID_ROWS - 2; r++) {
+        for (let c = 2; c < GRID_COLS - 2; c++) {
+            if (newMap[r][c] === 0) { // Is this cell a Wall?
+                const pathCount = getSurroundingPathCount(r, c, newMap);
+                
+                // If it has 5 or more path/dot neighbors, it's essentially a single floating wall or a corner
+                // surrounded by paths. This ensures the walls are not thicker than 1 block.
+                if (pathCount >= 5) { // 5 paths/dots means 3 or fewer walls, likely a double wall error
+                   newMap[r][c] = 1; // Force open
+                }
+            }
+        }
+    }
+    // -----------------------------------------------------
+
+
     // 3. Finalize: Connect the inner maze to the outer loop and place dots/pellets.
 
     // A. Fill all carved inner paths (1) with dots (2).
@@ -517,16 +556,15 @@ window.onload = function() {
         }
     }
     
-    // B. Create connection gates (increase to 8 openings)
+    // B. Create connection gates (8 openings)
     const connectionPoints = [];
     
-    // Check the wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
-    // NOTE: Inner walls are at EVEN indices (2, 4, 6, etc.) but we need to check the cells adjacent to the outer loop.
-    for (let c = 2; c < GRID_COLS - 2; c += 2) { // Check EVEN columns (potential wall blocks)
+    // Check potential wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
+    for (let c = 2; c < GRID_COLS - 2; c++) { // Check ALL columns (even and odd)
         if (newMap[2][c] === 0) connectionPoints.push({r: 2, c: c});
         if (newMap[GRID_ROWS - 3][c] === 0) connectionPoints.push({r: GRID_ROWS - 3, c: c});
     }
-    for (let r = 2; r < GRID_ROWS - 2; r += 2) { // Check EVEN rows
+    for (let r = 2; r < GRID_ROWS - 2; r++) { // Check ALL rows
         if (newMap[r][2] === 0) connectionPoints.push({r: r, c: 2});
         if (newMap[r][GRID_COLS - 3] === 0) connectionPoints.push({r: r, c: GRID_COLS - 3});
     }
@@ -539,7 +577,7 @@ window.onload = function() {
         // Open wall to dot (2)
         newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; 
         
-        // Also clear the DOT immediately next to it on the outer ring to ensure flow (2 -> 1)
+        // Also ensure the dot immediately next to it on the outer ring is a path (1) to improve flow
         if (connectionPoints[i].r === 2) newMap[1][connectionPoints[i].c] = 1;
         if (connectionPoints[i].r === GRID_ROWS - 3) newMap[GRID_ROWS - 2][connectionPoints[i].c] = 1;
         if (connectionPoints[i].c === 2) newMap[connectionPoints[i].r][1] = 1;
@@ -626,11 +664,10 @@ window.onload = function() {
         map[newY_tentative][newX_tentative] !== 0) 
     {
         // If the pending move is valid, commit it to the current direction
+        // This is the core fix: it allows 180-degree turns instantly if the path is clear.
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }
-    // NOTE: The key fix is that we ALLOW the direction to be set even if it's 180 degrees opposite, 
-    // as long as the path is clear (which is true if it's not a wall).
 
     // 2. Execute the CURRENT direction move.
     const targetX = bradman.x + bradman.dx;
@@ -901,7 +938,7 @@ window.onload = function() {
   }
   
   function setDirection(newDir) {
-    // NOTE: In Pac-Man, the next_dx/dy should be set regardless of the current dx/dy (allowing instant 180s)
+    // FIX: Set the next_dx/dy instantly for full Pac-Man responsiveness (including 180 turns)
     bradman.next_dx = newDir.x;
     bradman.next_dy = newDir.y;
     started = true;

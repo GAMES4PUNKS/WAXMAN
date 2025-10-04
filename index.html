@@ -331,8 +331,8 @@ window.onload = function() {
   
   // --- Game Constants & Emojis ---
   const BRADMAN_EMOJI = '🐸'; // Bradman (Frog/Toad)
-  // ADDED 2 NEW GHOST EMOJIS (Clown and Robot)
-  const GHOST_EMOJIS = ['👻', '😈', '👽', '🤡', '🤖']; 
+  // EXPANDED GHOST EMOJIS for up to 8 ghosts
+  const GHOST_EMOJIS = ['👻', '😈', '👽', '🤡', '🤖', '👹', '👾', '💯']; 
   const DOT_EMOJI = '⭐️'; // Standard dot
   const POWER_PELLET_EMOJI = '🌟'; // Flashing power pellet
   const WALL_EMOJI = '⬛️'; // Black square for walls (Perimeter only)
@@ -342,6 +342,7 @@ window.onload = function() {
   
   const SCARY_TIME = 200; 
   const POWER_PELLET_COUNT = 4; 
+  const MAX_GHOSTS = 8; // Max number of ghosts the game will spawn
 
   // --- HTML Elements & Setup ---
   const canvas = document.getElementById("gameCanvas");
@@ -444,23 +445,45 @@ window.onload = function() {
   /** Sets up the ghosts based on the current map. */
   function setupGhosts() {
     ghosts = [];
-    const baseGhosts = 2;
-    const maxGhosts = 8; // UPDATED MAX GHOSTS
-    const numGhosts = Math.min(baseGhosts + Math.floor((level - 1) / 2), maxGhosts); 
+    // Start with 4 ghosts on Level 1, max 8
+    const numGhosts = Math.min(4 + Math.floor((level - 1) / 2), MAX_GHOSTS); 
     const ghostSpeedFactor = 1 + (level * 0.1); 
+
+    // Pre-calculate fixed starting positions
+    const fixedPositions = [
+        // 1. Center
+        {x: Math.floor(GRID_COLS / 2), y: Math.floor(GRID_ROWS / 2)}, 
+        // 2. Top Right
+        {x: GRID_COLS - 2, y: 1}, 
+        // 3. Bottom Left
+        {x: 1, y: GRID_ROWS - 2}, 
+        // 4. Bottom Right
+        {x: GRID_COLS - 2, y: GRID_ROWS - 2},
+        // 5. Top Left (unused, but useful for staggered setup)
+        // {x: 1, y: 1}, 
+    ];
 
     for (let i = 0; i < numGhosts; i++) {
         let gx, gy;
-        // Stagger ghosts near corners (indices 1 or GRID_X-2)
-        if (i % 2 === 0) { 
-            gx = GRID_COLS - 2 - (i % 4); 
-            gy = 1 + (i % 2); 
-        } else { 
-            gx = 1 + (i % 4);
-            gy = GRID_ROWS - 2 - (i % 2);
+        let initialPos;
+
+        if (i === 0) { // Center
+            initialPos = fixedPositions[0];
+        } else if (i <= 3) { // Three corners (1, 2, 3)
+            initialPos = fixedPositions[i];
+        } else {
+            // Additional ghosts start staggered near the center area
+            let offset = i - 3;
+            initialPos = {
+                x: fixedPositions[0].x + (offset % 2 === 0 ? offset : -offset),
+                y: fixedPositions[0].y + (offset % 2 === 0 ? -offset : offset)
+            };
         }
+
+        gx = initialPos.x;
+        gy = initialPos.y;
         
-        // Ensure ghost starts on a path (not wall)
+        // Safety check: ensure ghost starts on a path (not wall, although only perimeter is wall)
         while(map[gy] && map[gy][gx] === 0) {
             gx = Math.floor(Math.random() * (GRID_COLS - 2)) + 1;
             gy = Math.floor(Math.random() * (GRID_ROWS - 2)) + 1;
@@ -477,7 +500,8 @@ window.onload = function() {
             dy: 0 
         });
     }
-  }
+}
+
 
   // --- Bradman Movement Logic ---
   

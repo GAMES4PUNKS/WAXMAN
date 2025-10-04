@@ -331,7 +331,8 @@ window.onload = function() {
   
   // --- Game Constants & Emojis ---
   const BRADMAN_EMOJI = '🐸'; // Bradman (Frog/Toad)
-  const GHOST_EMOJIS = ['👻', '😈', '👽'];
+  // ADDED 2 NEW GHOST EMOJIS (Clown and Robot)
+  const GHOST_EMOJIS = ['👻', '😈', '👽', '🤡', '🤖']; 
   const DOT_EMOJI = '⭐️'; // Standard dot
   const POWER_PELLET_EMOJI = '🌟'; // Flashing power pellet
   const WALL_EMOJI = '⬛️'; // Black square for walls (Perimeter only)
@@ -352,7 +353,7 @@ window.onload = function() {
   const finalScoreSpan = document.getElementById("finalScore");
   const overlay = document.getElementById("overlay");
   const loginPopup = document.getElementById("loginPopup");
-  const radio = document.getElementById("radioStream"); // Reinstated radio element reference
+  const radio = document.getElementById("radioStream"); 
   
   // Set up touch/desktop UI visibility
   const statusBarCombined = document.getElementById("statusBarCombined");
@@ -377,9 +378,9 @@ window.onload = function() {
         case "levelDisplay": return document.getElementById("levelDisplayTouch");
         case "highScoreDisplay": return document.getElementById("highScoreDisplayTouch");
         case "pauseBtn": return document.getElementById("pauseBtnTouch");
-        case "muteBtn": return document.getElementById("muteBtnTouch"); // Reinstated mute button
+        case "muteBtn": return document.getElementById("muteBtnTouch"); 
         case "speedSelect": return document.getElementById("speedSelectTouch");
-        case "toggleRadio": return document.getElementById("toggleRadioTouch"); // Reinstated radio button
+        case "toggleRadio": return document.getElementById("toggleRadioTouch"); 
         case "loginBtn": return document.getElementById("loginBtnTouch");
       }
     }
@@ -397,7 +398,7 @@ window.onload = function() {
   let paused = false;
   let gameInterval, speed = 250; 
   let gameOverFlag = false;
-  let radioMuted = false; // Mute state for radio/music
+  let radioMuted = false; 
   let lastOverlayMsg = "";
 
   // --- Pac-Man Specific Functions ---
@@ -444,7 +445,7 @@ window.onload = function() {
   function setupGhosts() {
     ghosts = [];
     const baseGhosts = 2;
-    const maxGhosts = 6;
+    const maxGhosts = 8; // UPDATED MAX GHOSTS
     const numGhosts = Math.min(baseGhosts + Math.floor((level - 1) / 2), maxGhosts); 
     const ghostSpeedFactor = 1 + (level * 0.1); 
 
@@ -489,7 +490,7 @@ window.onload = function() {
         newX_tentative >= 0 && newX_tentative < GRID_COLS &&
         map[newY_tentative][newX_tentative] !== 0) 
     {
-        // Commit the pending move
+        // Commit the pending move (instant turn)
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }

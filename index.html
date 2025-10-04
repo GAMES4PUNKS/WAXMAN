@@ -35,21 +35,14 @@
       background: url('moshed-2021-11-29-0-39-58.gif') center/cover no-repeat;
       display: block;
       box-shadow: 0 0 20px #ffff00; /* Bradman Yellow for the glow */
-      margin: 0.5rem auto 0.5rem auto; /* Adjusted margins */
+      margin: 0.2rem auto 0.5rem auto; /* REDUCED MARGINS FOR BETTER SCREEN FIT */
       outline: none;
       position: relative;
       z-index: 1;
       image-rendering: crisp-edges;
       image-rendering: -webkit-optimize-contrast;
     }
-    /* Maze Name Display */
-    #mazeNameDisplay {
-        font-family: 'Orbitron', sans-serif;
-        color: #ff00ff; /* Magenta/Purple color for name */
-        font-size: 1.5em;
-        margin-bottom: 0.5em;
-        text-shadow: 0 0 5px #ff00ff;
-    }
+    /* Maze Name Display - REMOVED FOR SCREEN FIT */
     /* Status bar split for touch */
     #statusBarRow1,
     #statusBarRow2 {
@@ -208,7 +201,7 @@
       width: 100%;
       justify-content: center;
       align-items: center;
-      margin: 1em 0 0.5em 0; /* Adjusted margins */
+      margin: 0.5em 0 0.2em 0; /* Further reduced margins */
     }
     .show-dpad #dpad-area {
       display: flex;
@@ -250,7 +243,7 @@
         height: 64px;
         font-size: 1.52rem;
       }
-      #dpad-area { margin: 0.5em 0 0.5em 0; }
+      #dpad-area { margin: 0.2em 0 0.1em 0; }
       #statusBarCombined, #statusBarRow1, #statusBarRow2 { font-size: 1.0rem; }
     }
     .visually-hidden {
@@ -265,7 +258,6 @@
 </head>
 <body>
 <div id="main-content">
-  <div id="mazeNameDisplay">MAZE3008</div>
   <div style="position:relative;">
     <canvas id="gameCanvas" tabindex="0" aria-label="Bradman Pac-Man inspired game"></canvas>
     <div id="overlay"></div>
@@ -353,7 +345,8 @@ window.onload = function() {
   const TILE_SIZE = 20; 
   const GRID_COLS = 30;
   const GRID_ROWS = 30;
-  const WALL_SURROUND_THRESHOLD = 5; // Dot is removed if >= 5 surrounding walls
+  // Dot is removed if >= 5 surrounding walls (max 8 possible)
+  const WALL_SURROUND_THRESHOLD = 5; 
 
   // --- HTML Elements & Setup (Skipping repeated UI logic) ---
   const canvas = document.getElementById("gameCanvas");
@@ -440,25 +433,20 @@ window.onload = function() {
   function generateMap(currentLevel) {
     let newMap = [];
     
-    // 1. Initialize map: set perimeter (0) and inner area to walls (0)
+    // 1. Initialize map: all inner area to walls (0)
     for (let r = 0; r < GRID_ROWS; r++) {
         newMap[r] = new Array(GRID_COLS).fill(0); 
     }
-    for (let r = 1; r < GRID_ROWS - 1; r++) {
-        for (let c = 1; c < GRID_COLS - 1; c++) {
-            newMap[r][c] = 0;
-        }
-    }
 
     // CRITICAL CHANGE: Clear the outer path (row/col 1 to N-2) to be dots (2)
-    // This creates the safe, clear running lane.
+    // This creates the safe, clear running lane, ensuring no double-blocks in this ring.
+    for (let i = 1; i < GRID_COLS - 1; i++) {
+        newMap[1][i] = 2; // Top
+        newMap[GRID_ROWS - 2][i] = 2; // Bottom
+    }
     for (let i = 1; i < GRID_ROWS - 1; i++) {
-        // Top and Bottom horizontal lines
-        newMap[1][i] = 2;
-        newMap[GRID_ROWS - 2][i] = 2;
-        // Left and Right vertical lines
-        newMap[i][1] = 2;
-        newMap[i][GRID_COLS - 2] = 2;
+        newMap[i][1] = 2; // Left
+        newMap[i][GRID_COLS - 2] = 2; // Right
     }
 
     // 2. Modified Recursive Backtracker Maze Generation
@@ -466,11 +454,11 @@ window.onload = function() {
     for(let r = 0; r < GRID_ROWS; r++) visited[r] = new Array(GRID_COLS).fill(0);
     
     let stack = [];
-    // Start maze generation inside the loop, ensuring ODD coordinates are used.
     let inner_min = 3;
     let inner_max_col = GRID_COLS - 4;
     let inner_max_row = GRID_ROWS - 4;
 
+    // Start coordinates for carving must be odd and within the interior (3 to N-4)
     let startX = inner_min + (Math.floor(Math.random() * ((inner_max_col - inner_min) / 2 + 1)) * 2);
     let startY = inner_min + (Math.floor(Math.random() * ((inner_max_row - inner_min) / 2 + 1)) * 2);
 
@@ -511,7 +499,16 @@ window.onload = function() {
 
     // 3. Finalize: Connect the inner maze to the outer loop and place dots/pellets.
 
-    // A. Connect the inner maze to the outer loop (minimum 4 connection points guaranteed)
+    // A. Fill all carved inner paths (1) with dots (2).
+    for (let r = 2; r < GRID_ROWS - 2; r++) {
+        for (let c = 2; c < GRID_COLS - 2; c++) {
+            if (newMap[r][c] === 1) {
+                newMap[r][c] = 2; // Inner path cells get dots
+            }
+        }
+    }
+    
+    // B. Create connection gates (increase to 8 openings)
     const connectionPoints = [];
     
     // Check the wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
@@ -524,24 +521,15 @@ window.onload = function() {
         if (newMap[r][GRID_COLS - 3] === 0) connectionPoints.push({r: r, c: GRID_COLS - 3});
     }
     
-    // Randomly open 4 connection points
+    // Randomly open 8 connection points
     connectionPoints.sort(() => 0.5 - Math.random());
-    const numToOpen = Math.min(connectionPoints.length, 4); 
+    const numToOpen = Math.min(connectionPoints.length, 8); 
 
     for (let i = 0; i < numToOpen; i++) {
         newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; // Open wall to dot (2)
     }
 
-    // B. Place Dots (2) on all cleared inner paths (1) and enforce density rule.
-    for (let r = 2; r < GRID_ROWS - 2; r++) {
-        for (let c = 2; c < GRID_COLS - 2; c++) {
-            if (newMap[r][c] === 1) {
-                newMap[r][c] = 2; // Inner path cells get dots
-            }
-        }
-    }
-    
-    // ENFORCE DOT DENSITY RULE (Remove dots surrounded by too many walls)
+    // C. ENFORCE DOT DENSITY RULE (Remove dots surrounded by too many walls)
     let dotRemoved = true;
     while(dotRemoved) {
         dotRemoved = false;
@@ -558,7 +546,7 @@ window.onload = function() {
         }
     }
 
-    // C. Place Power Pellets (3) and clear start zone.
+    // D. Place Power Pellets (3) and clear start zone.
     
     // Place Power Pellets (3) in the corners of the outer loop
     newMap[1][GRID_COLS - 2] = 3;

@@ -322,6 +322,8 @@
 <audio id="gameOverSound" src="gameover.mp3" preload="auto"></audio>
 <audio id="timerSound" src="timer.mp3" preload="auto"></audio>
 <audio id="timerOverSound" src="timerover.mp3" preload="auto"></audio>
+<audio id="gameStartSound" src="gamestart.mp3" preload="auto"></audio>
+<audio id="pillSound" src="pill.mp3" preload="auto"></audio>
 
 
 <script>
@@ -366,6 +368,8 @@ window.onload = function() {
   const gameOverSound = document.getElementById("gameOverSound");
   const timerSound = document.getElementById("timerSound");
   const timerOverSound = document.getElementById("timerOverSound");
+  const gameStartSound = document.getElementById("gameStartSound");
+  const pillSound = document.getElementById("pillSound");
 
   // Set up touch/desktop UI visibility
   const statusBarCombined = document.getElementById("statusBarCombined");
@@ -485,6 +489,8 @@ window.onload = function() {
         // 3. Bottom Right
         {x: GRID_COLS - 2, y: GRID_ROWS - 2},
     ];
+    // Center position for respawn
+    const centerPos = fixedPositions[0];
 
     for (let i = 0; i < numGhosts; i++) {
         let gx, gy;
@@ -519,7 +525,9 @@ window.onload = function() {
             scared: false,
             scaredTimer: 0,
             dx: 0, 
-            dy: 0 
+            dy: 0,
+            respawnX: centerPos.x, // Store center for respawn
+            respawnY: centerPos.y
         });
     }
 }
@@ -653,6 +661,9 @@ window.onload = function() {
         map[bradman.y][bradman.x] = 1; // Clear pellet
         score += 50;
         
+        // ACTIVATE PILL SOUND
+        playSound(pillSound);
+        
         // ACTIVATE SCARY MODE
         ghosts.forEach(g => {
             if (!g.scared) {
@@ -672,13 +683,17 @@ window.onload = function() {
             if (ghost.scared) {
                 // EAT GHOST
                 score += 200;
-                ghost.x = GRID_COLS - 2;
-                ghost.y = 1;
-                ghost.scared = false;
-                ghost.scaredTimer = 0;
+                
+                // CRUCIAL FIX: Respawn ghost at center and keep SCARY status if timer is still running
+                ghost.x = ghost.respawnX;
+                ghost.y = ghost.respawnY;
+                
+                // If timer is NOT zero, keep scared status. 
+                // If timer IS zero, the next loop cycle will revert scared=false and stop sound.
+                
             } else {
                 // GHOST EATS BRADMAN
-                playSound(deadSound); // Play dead sound
+                playSound(deadSound);
                 gameOver();
                 return;
             }
@@ -791,6 +806,10 @@ window.onload = function() {
         stopSound(gameOverSound);
         stopSound(timerSound);
         stopSound(timerOverSound);
+        stopSound(deadSound);
+
+        // Play game start sound
+        playSound(gameStartSound);
 
         updateHud();
         gameStatusLine.style.display = "none";

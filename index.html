@@ -337,19 +337,19 @@ window.onload = function() {
   }
   
   // --- Game Constants & Emojis ---
-  const BRADMAN_EMOJI = '🟡';
+  const BRADMAN_EMOJI = '🐸'; // Changed to Frog/Toad
   const GHOST_EMOJIS = ['👻', '😈', '👽'];
-  const DOT_EMOJI = '⭐';
+  const DOT_EMOJI = '⭐️'; // Standard dot
+  const POWER_PELLET_EMOJI = '🌟'; // Flashing power pellet
   const WALL_EMOJI = '⬛️'; // Black square for walls
   const TILE_SIZE = 20; 
   const GRID_COLS = 30;
   const GRID_ROWS = 30;
-  // Dot is removed if >= 5 surrounding walls (max 8 possible)
-  const WALL_SURROUND_THRESHOLD = 5; 
-  // Wall segment is converted to path if it has 3 or fewer wall neighbors
-  const WALL_CLEANUP_THRESHOLD = 5; // A wall should have at least 4 wall neighbors to be stable
+  
+  const SCARY_TIME = 200; // Time in frames (200 frames = 20 seconds at 10 updates/sec)
+  const POWER_PELLET_COUNT = 4; // Number of power pellets per level
 
-  // --- HTML Elements & Setup (Skipping repeated UI logic) ---
+  // --- HTML Elements & Setup ---
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   canvas.width = GRID_COLS * TILE_SIZE;
@@ -410,13 +410,12 @@ window.onload = function() {
 
   // --- Pac-Man Specific Functions ---
   
-  /** Checks surrounding cells for walls to maintain dot density. */
+  /** Gets a count of WALLS surrounding a cell. */
   function getSurroundingWallCount(r, c, currentMap) {
       let wallCount = 0;
-      // Check 3x3 area around the cell (r, c)
       for (let dr = -1; dr <= 1; dr++) {
           for (let dc = -1; dc <= 1; dc++) {
-              if (dr === 0 && dc === 0) continue; // Skip the center cell
+              if (dr === 0 && dc === 0) continue; 
               const nr = r + dr;
               const nc = c + dc;
 
@@ -430,185 +429,41 @@ window.onload = function() {
       return wallCount;
   }
 
-  /** Gets the count of PATH/DOT cells (non-wall) surrounding a cell. Used for wall cleanup. */
-  function getSurroundingPathCount(r, c, currentMap) {
-      let pathCount = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-              if (dr === 0 && dc === 0) continue;
-              const nr = r + dr;
-              const nc = c + dc;
-
-              if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
-                  // Count path (1), dot (2), or pellet (3)
-                  if (currentMap[nr][nc] !== 0) {
-                      pathCount++;
-                  }
-              }
-          }
-      }
-      return pathCount;
-  }
-
-  /** Generates a unique maze map with a guaranteed clear outer loop and usable inner maze. */
+  /** Generates an open arena map. */
   function generateMap(currentLevel) {
     let newMap = [];
     
-    // 1. Initialize map: all inner area to walls (0)
+    // 1. Initialize map: all interior area is dots (2), perimeter is wall (0)
     for (let r = 0; r < GRID_ROWS; r++) {
-        newMap[r] = new Array(GRID_COLS).fill(0); 
-    }
-    for (let r = 1; r < GRID_ROWS - 1; r++) {
-        for (let c = 1; c < GRID_COLS - 1; c++) {
-            newMap[r][c] = 0; 
-        }
-    }
-
-    // CRITICAL FIX 1: Clear the outer path (row/col 1 to N-2) to be dots (2)
-    // This creates the safe, clear running lane, ensuring no double-blocks in this ring.
-    for (let i = 1; i < GRID_COLS - 1; i++) {
-        newMap[1][i] = 2; // Top
-        newMap[GRID_ROWS - 2][i] = 2; // Bottom
-    }
-    for (let i = 1; i < GRID_ROWS - 1; i++) {
-        newMap[i][1] = 2; // Left
-        newMap[i][GRID_COLS - 2] = 2; // Right
-    }
-
-    // 2. Modified Recursive Backtracker Maze Generation
-    // We carve the maze walls (0) into paths (1) starting INSIDE the clear loop.
-    let visited = [];
-    for(let r = 0; r < GRID_ROWS; r++) visited[r] = new Array(GRID_COLS).fill(0);
-    
-    let stack = [];
-    let inner_min = 3;
-    let inner_max_col = GRID_COLS - 4;
-    let inner_max_row = GRID_ROWS - 4;
-
-    // Start coordinates for carving must be odd and within the interior (3 to N-4)
-    let startX = inner_min + (Math.floor(Math.random() * ((inner_max_col - inner_min) / 2 + 1)) * 2);
-    let startY = inner_min + (Math.floor(Math.random() * ((inner_max_row - inner_min) / 2 + 1)) * 2);
-
-    if (startX < inner_min) startX = inner_min;
-    if (startY < inner_min) startY = inner_min;
-    
-    stack.push({x: startX, y: startY});
-    visited[startY][startX] = 1;
-    newMap[startY][startX] = 1; // Mark starting carving cell as path (1)
-
-    const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]]; // Move 2 steps
-
-    while (stack.length > 0) {
-        let {x: cx, y: cy} = stack[stack.length - 1];
-        let unvisitedNeighbors = [];
-        
-        for (const [dx, dy] of directions) {
-            const nx = cx + dx;
-            const ny = cy + dy;
-            // Carving bounds: [3..GRID_ROWS-4] for the ODD coordinate cells
-            if (ny >= inner_min && ny <= inner_max_row && nx >= inner_min && nx <= inner_max_col && visited[ny][nx] === 0) {
-                unvisitedNeighbors.push({x: nx, y: ny, dx: dx, dy: dy});
-            }
-        }
-        
-        if (unvisitedNeighbors.length > 0) {
-            const next = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
-            
-            // Wall cell (0) is opened to a path (1) on the EVEN coordinate between them
-            newMap[cy + next.dy / 2][cx + next.dx / 2] = 1; 
-            
-            stack.push(next);
-            visited[next.y][next.x] = 1;
-            newMap[next.y][next.x] = 1; // Mark new cell as empty path (1)
-        } else {
-            stack.pop();
-        }
-    }
-
-    // --- POST GENERATION CLEANUP (ULTIMATE FIX FOR DOUBLE WALLS) ---
-    // Iterate until no floating walls are removed, guaranteeing single-wall connectivity.
-    let wallRemoved = true;
-    while(wallRemoved) {
-        wallRemoved = false;
-        for (let r = 2; r < GRID_ROWS - 2; r++) {
-            for (let c = 2; c < GRID_COLS - 2; c++) {
-                if (newMap[r][c] === 0) { // Is this cell a Wall?
-                    // A wall cell should have at least 4 non-diagonal WALL neighbors to be a stable corner or segment.
-                    // If it has 5 or more PATH/DOT neighbors (out of 8 possible), it's a floating wall.
-                    const pathCount = getSurroundingPathCount(r, c, newMap);
-                    
-                    if (pathCount >= WALL_CLEANUP_THRESHOLD) { 
-                       newMap[r][c] = 1; // Force open to a path
-                       wallRemoved = true;
-                    }
-                }
-            }
-        }
-    }
-    // -----------------------------------------------------
-
-
-    // 3. Finalize: Connect the inner maze to the outer loop and place dots/pellets.
-
-    // A. Fill all carved inner paths (1) with dots (2).
-    for (let r = 2; r < GRID_ROWS - 2; r++) {
-        for (let c = 2; c < GRID_COLS - 2; c++) {
-            if (newMap[r][c] === 1) {
-                newMap[r][c] = 2; // Inner path cells get dots
-            }
-        }
+        newMap[r] = new Array(GRID_COLS).fill(2); 
     }
     
-    // B. Create connection gates (8 openings)
-    const connectionPoints = [];
-    
-    // Check all potential wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
-    for (let c = 2; c < GRID_COLS - 2; c++) { 
-        if (newMap[2][c] === 0) connectionPoints.push({r: 2, c: c});
-        if (newMap[GRID_ROWS - 3][c] === 0) connectionPoints.push({r: GRID_ROWS - 3, c: c});
+    // Set perimeter to wall (0)
+    for (let i = 0; i < GRID_COLS; i++) {
+        newMap[0][i] = 0;
+        newMap[GRID_ROWS - 1][i] = 0;
     }
-    for (let r = 2; r < GRID_ROWS - 2; r++) {
-        if (newMap[r][2] === 0) connectionPoints.push({r: r, c: 2});
-        if (newMap[r][GRID_COLS - 3] === 0) connectionPoints.push({r: r, c: GRID_COLS - 3});
-    }
-    
-    // Randomly open 8 connection points
-    connectionPoints.sort(() => 0.5 - Math.random());
-    const numToOpen = Math.min(connectionPoints.length, 8); 
-
-    for (let i = 0; i < numToOpen; i++) {
-        newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; // Open wall to dot (2)
-        
-        // Also ensure the dot immediately next to it on the outer ring is a path (1) to improve flow
-        if (connectionPoints[i].r === 2) newMap[1][connectionPoints[i].c] = 1;
-        if (connectionPoints[i].r === GRID_ROWS - 3) newMap[GRID_ROWS - 2][connectionPoints[i].c] = 1;
-        if (connectionPoints[i].c === 2) newMap[connectionPoints[i].r][1] = 1;
-        if (connectionPoints[i].c === GRID_COLS - 3) newMap[connectionPoints[i].r][GRID_COLS - 2] = 1;
+    for (let i = 0; i < GRID_ROWS; i++) {
+        newMap[i][0] = 0;
+        newMap[i][GRID_COLS - 1] = 0;
     }
 
-    // C. ENFORCE DOT DENSITY RULE (Remove dots surrounded by too many walls)
-    let dotRemoved = true;
-    while(dotRemoved) {
-        dotRemoved = false;
-        for (let r = 1; r < GRID_ROWS - 1; r++) {
-            for (let c = 1; c < GRID_COLS - 1; c++) {
-                if (newMap[r][c] === 2) {
-                    const wallCount = getSurroundingWallCount(r, c, newMap);
-                    if (wallCount >= WALL_SURROUND_THRESHOLD) {
-                        newMap[r][c] = 1; // Change back to empty path (1)
-                        dotRemoved = true;
-                    }
-                }
-            }
+    // 2. Open Field Logic: All inner cells are dots (2)
+    // NOTE: If you decide to bring the maze back, this is the section to change.
+    // The previous logic's final state created a map *without* walls, which is what we want now.
+
+    // 3. Place Power Pellets (3) randomly on dots (2).
+    let pelletCount = 0;
+    while (pelletCount < POWER_PELLET_COUNT) {
+        let pr = Math.floor(Math.random() * (GRID_ROWS - 2)) + 1;
+        let pc = Math.floor(Math.random() * (GRID_COLS - 2)) + 1;
+
+        // Ensure we don't place a pellet on Bradman's start or on a wall
+        if (newMap[pr][pc] === 2 && (pr !== bradman.y || pc !== bradman.x)) {
+            newMap[pr][pc] = 3;
+            pelletCount++;
         }
     }
-
-    // D. Place Power Pellets (3) and clear start zone.
-    
-    // Place Power Pellets (3) in the corners of the outer loop
-    newMap[1][GRID_COLS - 2] = 3;
-    newMap[GRID_ROWS - 2][1] = 3;
-    newMap[GRID_ROWS - 2][GRID_COLS - 2] = 3;
     
     // Clear Bradman's start spot (1,1)
     newMap[bradman.y][bradman.x] = 1; // Bradman's spot (clear path - 1)
@@ -626,7 +481,7 @@ window.onload = function() {
 
     for (let i = 0; i < numGhosts; i++) {
         let gx, gy;
-        // Place ghosts near the outer loop's corners (indices 1 or GRID_X-2)
+        // Stagger ghosts near corners (indices 1 or GRID_X-2)
         if (i % 2 === 0) { 
             gx = GRID_COLS - 2 - (i % 4); 
             gy = 1 + (i % 2); 
@@ -654,7 +509,7 @@ window.onload = function() {
     }
   }
 
-  // --- Bradman Movement Logic (Fixed for instant reversal) ---
+  // --- Bradman Movement Logic ---
   
   function moveBradman() {
     // 1. Check if the NEXT (pending) move is valid.
@@ -666,6 +521,7 @@ window.onload = function() {
         map[newY_tentative][newX_tentative] !== 0) 
     {
         // If the pending move is valid, commit it to the current direction
+        // This allows instant 180-degree turns and 90-degree turns.
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }
@@ -682,50 +538,57 @@ window.onload = function() {
         bradman.y = targetY;
         return true;
     }
-    // Stop movement if blocked
+    // Stop movement if blocked (only happens at the perimeter wall 0)
     bradman.dx = 0;
     bradman.dy = 0;
     return false;
   }
   
+  /** Ghost AI: Always Chase Bradman, or Flee when Scared. */
   function moveGhosts() {
     ghosts.forEach(ghost => {
+        // Simple speed control
         if (Math.random() > (1 / ghost.speed)) return;
         
-        const dx_target = Math.sign(bradman.x - ghost.x);
-        const dy_target = Math.sign(bradman.y - ghost.y);
+        let dx_target = Math.sign(bradman.x - ghost.x);
+        let dy_target = Math.sign(bradman.y - ghost.y);
 
-        let targetX_dir = dx_target;
-        let targetY_dir = dy_target;
-
+        // If scared, reverse the target direction (flee)
         if (ghost.scared) {
-            targetX_dir *= -1;
-            targetY_dir *= -1;
+            dx_target *= -1;
+            dy_target *= -1;
         }
         
-        let potentialDirs = [];
-
-        if (targetX_dir !== 0 && map[ghost.y] && map[ghost.y][ghost.x + targetX_dir] !== 0) {
-            potentialDirs.push({x: targetX_dir, y: 0});
-        }
-        if (targetY_dir !== 0 && map[ghost.y + targetY_dir] && map[ghost.y + targetY_dir][ghost.x] !== 0) {
-            potentialDirs.push({x: 0, y: targetY_dir});
+        let potentialMoves = [];
+        
+        // Prioritize moves that close/increase the distance
+        // The ghost prefers horizontal or vertical movement randomly
+        if (Math.random() > 0.5) {
+            // Try X movement first
+            if (map[ghost.y] && map[ghost.y][ghost.x + dx_target] !== 0) {
+                potentialMoves.push({x: dx_target, y: 0});
+            }
+            if (map[ghost.y + dy_target] && map[ghost.y + dy_target][ghost.x] !== 0) {
+                potentialMoves.push({x: 0, y: dy_target});
+            }
+        } else {
+            // Try Y movement first
+            if (map[ghost.y + dy_target] && map[ghost.y + dy_target][ghost.x] !== 0) {
+                potentialMoves.push({x: 0, y: dy_target});
+            }
+            if (map[ghost.y] && map[ghost.y][ghost.x + dx_target] !== 0) {
+                potentialMoves.push({x: dx_target, y: 0});
+            }
         }
         
-        const perpendiculars = [
-            {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
-        ].filter(dir => 
-            (dir.x !== -ghost.dx || dir.x === 0) && 
-            (dir.y !== -ghost.dy || dir.y === 0) &&
+        // Filter out redundant and reverse moves, and moves into walls
+        const validMoves = potentialMoves.filter(dir => 
+            (dir.x !== -ghost.dx || dir.y !== -ghost.dy) && // Allow any move but direct 180 reversal
             map[ghost.y + dir.y] && map[ghost.y + dir.y][ghost.x + dir.x] !== 0
         );
 
-        const allValidMoves = [...potentialDirs, ...perpendiculars]
-                                .filter((v, i, a) => a.findIndex(t => (t.x === v.x && t.y === v.y)) === i)
-                                .sort(() => Math.random() - 0.5); 
-        
-        if (allValidMoves.length > 0) {
-            const move = allValidMoves[0];
+        if (validMoves.length > 0) {
+            const move = validMoves[Math.floor(Math.random() * validMoves.length)]; // Choose one randomly
             ghost.x += move.x;
             ghost.y += move.y;
             ghost.dx = move.x;
@@ -739,6 +602,7 @@ window.onload = function() {
 
     moveBradman();
 
+    // 1. Ghost Movement & Scared Timer Update
     moveGhosts(); 
     ghosts.forEach(ghost => {
         if (ghost.scaredTimer > 0) {
@@ -747,28 +611,35 @@ window.onload = function() {
         }
     });
 
+    // 2. Collect Dots/Pellets
     let tileType = map[bradman.y][bradman.x];
     if (tileType === 2) {
         map[bradman.y][bradman.x] = 1; // Clear dot
         score += 10;
-    } else if (tileType === 3) { // Power Pellet
+    } else if (tileType === 3) { // Power Pellet (🌟)
         map[bradman.y][bradman.x] = 1; // Clear pellet
         score += 50;
+        // ACTIVATE SCARY MODE
         ghosts.forEach(g => {
-            g.scared = true;
-            g.scaredTimer = 200; // ~20 seconds
+            if (!g.scared) {
+              g.scared = true;
+              g.scaredTimer = SCARY_TIME;
+            }
         });
     }
 
+    // 3. Ghost Interactions
     ghosts.forEach((ghost) => {
         if (bradman.x === ghost.x && bradman.y === ghost.y) {
             if (ghost.scared) {
+                // EAT GHOST
                 score += 200;
                 ghost.x = GRID_COLS - 2;
                 ghost.y = 1;
                 ghost.scared = false;
                 ghost.scaredTimer = 0;
             } else {
+                // GHOST EATS BRADMAN
                 if (!sfxMuted) { crashSound.currentTime = 0; crashSound.play(); }
                 gameOver();
                 return;
@@ -776,6 +647,7 @@ window.onload = function() {
         }
     });
     
+    // 4. Check Level Completion
     let remainingDots = map.flat().filter(t => t === 2 || t === 3).length;
     if (remainingDots === 0) {
         levelUp();
@@ -799,29 +671,33 @@ window.onload = function() {
             const screenY = r * TILE_SIZE;
             
             ctx.save();
-            if (map[r][c] === 0) { // Wall
+            if (map[r][c] === 0) { // Wall (Perimeter Only)
                 ctx.fillText(WALL_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
-            } else if (map[r][c] === 2) { // Dot
+            } else if (map[r][c] === 2) { // Dot (⭐️)
                 ctx.font = `${TILE_SIZE * 0.7}px sans-serif`;
                 ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
-            } else if (map[r][c] === 3) { // Power Pellet
+            } else if (map[r][c] === 3) { // Power Pellet (🌟)
                 ctx.font = `${TILE_SIZE}px sans-serif`;
-                ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 150)); 
-                ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
+                // Flashing effect for power pellet
+                ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 100)); 
+                ctx.fillText(POWER_PELLET_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
             }
             ctx.restore();
         }
     }
 
+    // Draw Bradman (🐸)
     ctx.font = `${TILE_SIZE}px sans-serif`;
     ctx.fillText(BRADMAN_EMOJI, 
                  (bradman.x + 0.5) * TILE_SIZE, 
                  (bradman.y + 0.5) * TILE_SIZE);
 
+    // Draw Ghosts
     ghosts.forEach(ghost => {
         let emoji = ghost.emoji;
         if (ghost.scared) {
-            emoji = '😨'; 
+            emoji = '😨'; // Scared emoji
+            // Flash a warning emoji when time is low
             if (ghost.scaredTimer < 50 && (Math.floor(Date.now() / 150) % 2 === 0)) {
                 emoji = ' RUN! '; 
                 ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
@@ -846,6 +722,7 @@ window.onload = function() {
       localStorage.setItem('bradman_highscore', highScore);
     }
     
+    // Reset Bradman and set up new map/ghosts
     bradman.x = 1;
     bradman.y = 1;
     bradman.dx = 0;
@@ -939,7 +816,7 @@ window.onload = function() {
   }
   
   function setDirection(newDir) {
-    // FIX: Set the next_dx/dy instantly for full Pac-Man responsiveness (including 180 turns)
+    // Allows instant 180s and 90s, as required for Pac-Man style movement
     bradman.next_dx = newDir.x;
     bradman.next_dy = newDir.y;
     started = true;

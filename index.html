@@ -347,7 +347,7 @@ window.onload = function() {
   // Dot is removed if >= 5 surrounding walls (max 8 possible)
   const WALL_SURROUND_THRESHOLD = 5; 
   // Wall segment is converted to path if it has 3 or fewer wall neighbors
-  const WALL_CLEANUP_THRESHOLD = 3; 
+  const WALL_CLEANUP_THRESHOLD = 5; // A wall should have at least 4 wall neighbors to be stable
 
   // --- HTML Elements & Setup (Skipping repeated UI logic) ---
   const canvas = document.getElementById("gameCanvas");
@@ -421,7 +421,6 @@ window.onload = function() {
               const nc = c + dc;
 
               if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
-                  // Only count true, permanent walls
                   if (currentMap[nr][nc] === 0) {
                       wallCount++;
                   }
@@ -459,14 +458,14 @@ window.onload = function() {
     for (let r = 0; r < GRID_ROWS; r++) {
         newMap[r] = new Array(GRID_COLS).fill(0); 
     }
-    // Set ALL inner cells (excluding the perimeter) to wall (0)
     for (let r = 1; r < GRID_ROWS - 1; r++) {
         for (let c = 1; c < GRID_COLS - 1; c++) {
             newMap[r][c] = 0; 
         }
     }
 
-    // CRITICAL FIX: Clear the outer path (row/col 1 to N-2) to be dots (2)
+    // CRITICAL FIX 1: Clear the outer path (row/col 1 to N-2) to be dots (2)
+    // This creates the safe, clear running lane, ensuring no double-blocks in this ring.
     for (let i = 1; i < GRID_COLS - 1; i++) {
         newMap[1][i] = 2; // Top
         newMap[GRID_ROWS - 2][i] = 2; // Bottom
@@ -526,18 +525,22 @@ window.onload = function() {
         }
     }
 
-    // --- POST GENERATION CLEANUP (FIXES DOUBLE WALLS) ---
-    // If a wall cell has too few neighbors that are ALSO walls, it's a floating segment or part of a double wall.
-    // We convert it to a path to join the maze.
-    for (let r = 2; r < GRID_ROWS - 2; r++) {
-        for (let c = 2; c < GRID_COLS - 2; c++) {
-            if (newMap[r][c] === 0) { // Is this cell a Wall?
-                const pathCount = getSurroundingPathCount(r, c, newMap);
-                
-                // If it has 5 or more path/dot neighbors, it's essentially a single floating wall or a corner
-                // surrounded by paths. This ensures the walls are not thicker than 1 block.
-                if (pathCount >= 5) { // 5 paths/dots means 3 or fewer walls, likely a double wall error
-                   newMap[r][c] = 1; // Force open
+    // --- POST GENERATION CLEANUP (ULTIMATE FIX FOR DOUBLE WALLS) ---
+    // Iterate until no floating walls are removed, guaranteeing single-wall connectivity.
+    let wallRemoved = true;
+    while(wallRemoved) {
+        wallRemoved = false;
+        for (let r = 2; r < GRID_ROWS - 2; r++) {
+            for (let c = 2; c < GRID_COLS - 2; c++) {
+                if (newMap[r][c] === 0) { // Is this cell a Wall?
+                    // A wall cell should have at least 4 non-diagonal WALL neighbors to be a stable corner or segment.
+                    // If it has 5 or more PATH/DOT neighbors (out of 8 possible), it's a floating wall.
+                    const pathCount = getSurroundingPathCount(r, c, newMap);
+                    
+                    if (pathCount >= WALL_CLEANUP_THRESHOLD) { 
+                       newMap[r][c] = 1; // Force open to a path
+                       wallRemoved = true;
+                    }
                 }
             }
         }
@@ -559,12 +562,12 @@ window.onload = function() {
     // B. Create connection gates (8 openings)
     const connectionPoints = [];
     
-    // Check potential wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
-    for (let c = 2; c < GRID_COLS - 2; c++) { // Check ALL columns (even and odd)
+    // Check all potential wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
+    for (let c = 2; c < GRID_COLS - 2; c++) { 
         if (newMap[2][c] === 0) connectionPoints.push({r: 2, c: c});
         if (newMap[GRID_ROWS - 3][c] === 0) connectionPoints.push({r: GRID_ROWS - 3, c: c});
     }
-    for (let r = 2; r < GRID_ROWS - 2; r++) { // Check ALL rows
+    for (let r = 2; r < GRID_ROWS - 2; r++) {
         if (newMap[r][2] === 0) connectionPoints.push({r: r, c: 2});
         if (newMap[r][GRID_COLS - 3] === 0) connectionPoints.push({r: r, c: GRID_COLS - 3});
     }
@@ -574,8 +577,7 @@ window.onload = function() {
     const numToOpen = Math.min(connectionPoints.length, 8); 
 
     for (let i = 0; i < numToOpen; i++) {
-        // Open wall to dot (2)
-        newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; 
+        newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; // Open wall to dot (2)
         
         // Also ensure the dot immediately next to it on the outer ring is a path (1) to improve flow
         if (connectionPoints[i].r === 2) newMap[1][connectionPoints[i].c] = 1;
@@ -652,7 +654,7 @@ window.onload = function() {
     }
   }
 
-  // --- Bradman Movement Logic (FIXED for instant reversal) ---
+  // --- Bradman Movement Logic (Fixed for instant reversal) ---
   
   function moveBradman() {
     // 1. Check if the NEXT (pending) move is valid.
@@ -664,7 +666,6 @@ window.onload = function() {
         map[newY_tentative][newX_tentative] !== 0) 
     {
         // If the pending move is valid, commit it to the current direction
-        // This is the core fix: it allows 180-degree turns instantly if the path is clear.
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }

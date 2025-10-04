@@ -267,7 +267,7 @@
     <span id="levelDisplay">Level: 1</span>
     <span id="highScoreDisplay">High Score: 0</span>
     <button id="pauseBtn" aria-pressed="false" title="Pause/Resume">⏸️</button>
-    <button id="muteBtn" aria-pressed="false" title="Mute/Unmute SFX">🔊</button>
+    <button id="muteBtn" aria-pressed="false" title="Mute/Unmute Radio">🔊</button>
     <label for="speedSelect" class="visually-hidden">Game Speed</label>
     <select id="speedSelect" title="Game Speed">
       <option value="250">Normal</option>
@@ -283,7 +283,7 @@
     <button id="pauseBtnTouch" aria-pressed="false" title="Pause/Resume">⏸️</button>
   </div>
   <div id="statusBarRow2">
-    <button id="muteBtnTouch" aria-pressed="false" title="Mute/Unmute SFX">🔊</button>
+    <button id="muteBtnTouch" aria-pressed="false" title="Mute/Unmute Radio">🔊</button>
     <label for="speedSelectTouch" class="visually-hidden">Game Speed</label>
     <select id="speedSelectTouch" title="Game Speed">
       <option value="250">Normal</option>
@@ -318,13 +318,6 @@
 <audio id="radioStream" loop>
   <source src="http://stream.radiojar.com/2qm1fc5kb" type="audio/mpeg">
 </audio>
-<audio id="explosionSound" src="explosion.mp3"></audio>
-<audio id="crashSound" src="crash.mp3"></audio>
-<audio id="spaceshipSound" src="spaceship.mp3"></audio>
-<audio id="alienSound" src="alien.mp3"></audio>
-<audio id="rocketSound" src="rocket.mp3"></audio>
-<audio id="satelliteSound" src="satellite.mp3"></audio>
-<audio id="spacemanSound" src="spaceman.mp3"></audio>
 
 <script>
 window.onload = function() {
@@ -337,17 +330,17 @@ window.onload = function() {
   }
   
   // --- Game Constants & Emojis ---
-  const BRADMAN_EMOJI = '🐸'; // Changed to Frog/Toad
+  const BRADMAN_EMOJI = '🐸'; // Bradman (Frog/Toad)
   const GHOST_EMOJIS = ['👻', '😈', '👽'];
   const DOT_EMOJI = '⭐️'; // Standard dot
   const POWER_PELLET_EMOJI = '🌟'; // Flashing power pellet
-  const WALL_EMOJI = '⬛️'; // Black square for walls
+  const WALL_EMOJI = '⬛️'; // Black square for walls (Perimeter only)
   const TILE_SIZE = 20; 
   const GRID_COLS = 30;
   const GRID_ROWS = 30;
   
-  const SCARY_TIME = 200; // Time in frames (200 frames = 20 seconds at 10 updates/sec)
-  const POWER_PELLET_COUNT = 4; // Number of power pellets per level
+  const SCARY_TIME = 200; 
+  const POWER_PELLET_COUNT = 4; 
 
   // --- HTML Elements & Setup ---
   const canvas = document.getElementById("gameCanvas");
@@ -357,10 +350,9 @@ window.onload = function() {
 
   const gameStatusLine = document.getElementById("gameStatusLine");
   const finalScoreSpan = document.getElementById("finalScore");
-  const radio = document.getElementById("radioStream");
   const overlay = document.getElementById("overlay");
   const loginPopup = document.getElementById("loginPopup");
-  const crashSound = document.getElementById("crashSound");
+  const radio = document.getElementById("radioStream"); // Reinstated radio element reference
   
   // Set up touch/desktop UI visibility
   const statusBarCombined = document.getElementById("statusBarCombined");
@@ -385,9 +377,9 @@ window.onload = function() {
         case "levelDisplay": return document.getElementById("levelDisplayTouch");
         case "highScoreDisplay": return document.getElementById("highScoreDisplayTouch");
         case "pauseBtn": return document.getElementById("pauseBtnTouch");
-        case "muteBtn": return document.getElementById("muteBtnTouch");
+        case "muteBtn": return document.getElementById("muteBtnTouch"); // Reinstated mute button
         case "speedSelect": return document.getElementById("speedSelectTouch");
-        case "toggleRadio": return document.getElementById("toggleRadioTouch");
+        case "toggleRadio": return document.getElementById("toggleRadioTouch"); // Reinstated radio button
         case "loginBtn": return document.getElementById("loginBtnTouch");
       }
     }
@@ -405,30 +397,11 @@ window.onload = function() {
   let paused = false;
   let gameInterval, speed = 250; 
   let gameOverFlag = false;
-  let sfxMuted = false;
+  let radioMuted = false; // Mute state for radio/music
   let lastOverlayMsg = "";
 
   // --- Pac-Man Specific Functions ---
   
-  /** Gets a count of WALLS surrounding a cell. */
-  function getSurroundingWallCount(r, c, currentMap) {
-      let wallCount = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-              if (dr === 0 && dc === 0) continue; 
-              const nr = r + dr;
-              const nc = c + dc;
-
-              if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
-                  if (currentMap[nr][nc] === 0) {
-                      wallCount++;
-                  }
-              }
-          }
-      }
-      return wallCount;
-  }
-
   /** Generates an open arena map. */
   function generateMap(currentLevel) {
     let newMap = [];
@@ -448,11 +421,7 @@ window.onload = function() {
         newMap[i][GRID_COLS - 1] = 0;
     }
 
-    // 2. Open Field Logic: All inner cells are dots (2)
-    // NOTE: If you decide to bring the maze back, this is the section to change.
-    // The previous logic's final state created a map *without* walls, which is what we want now.
-
-    // 3. Place Power Pellets (3) randomly on dots (2).
+    // 2. Place Power Pellets (3) randomly on dots (2).
     let pelletCount = 0;
     while (pelletCount < POWER_PELLET_COUNT) {
         let pr = Math.floor(Math.random() * (GRID_ROWS - 2)) + 1;
@@ -520,8 +489,7 @@ window.onload = function() {
         newX_tentative >= 0 && newX_tentative < GRID_COLS &&
         map[newY_tentative][newX_tentative] !== 0) 
     {
-        // If the pending move is valid, commit it to the current direction
-        // This allows instant 180-degree turns and 90-degree turns.
+        // Commit the pending move
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }
@@ -562,7 +530,6 @@ window.onload = function() {
         let potentialMoves = [];
         
         // Prioritize moves that close/increase the distance
-        // The ghost prefers horizontal or vertical movement randomly
         if (Math.random() > 0.5) {
             // Try X movement first
             if (map[ghost.y] && map[ghost.y][ghost.x + dx_target] !== 0) {
@@ -581,7 +548,7 @@ window.onload = function() {
             }
         }
         
-        // Filter out redundant and reverse moves, and moves into walls
+        // Filter out redundant and reverse moves, and moves into walls (0)
         const validMoves = potentialMoves.filter(dir => 
             (dir.x !== -ghost.dx || dir.y !== -ghost.dy) && // Allow any move but direct 180 reversal
             map[ghost.y + dir.y] && map[ghost.y + dir.y][ghost.x + dir.x] !== 0
@@ -640,7 +607,6 @@ window.onload = function() {
                 ghost.scaredTimer = 0;
             } else {
                 // GHOST EATS BRADMAN
-                if (!sfxMuted) { crashSound.currentTime = 0; crashSound.play(); }
                 gameOver();
                 return;
             }
@@ -743,6 +709,7 @@ window.onload = function() {
         gameOverFlag = false;
         paused = false; 
         started = false;
+        radio.volume = 0.5; // Set a default volume for radio
 
         updateHud();
         gameStatusLine.style.display = "none";
@@ -816,7 +783,6 @@ window.onload = function() {
   }
   
   function setDirection(newDir) {
-    // Allows instant 180s and 90s, as required for Pac-Man style movement
     bradman.next_dx = newDir.x;
     bradman.next_dy = newDir.y;
     started = true;
@@ -897,10 +863,12 @@ window.onload = function() {
   bindButton(getEl("pauseBtn"), togglePause);
   document.getElementById("restartBtn").onclick = resetGame;
   
+  // Reinstated Mute function logic (for radio/music)
   function toggleMute() {
-    sfxMuted = !sfxMuted;
+    radioMuted = !radioMuted;
+    radio.muted = radioMuted;
     const btns = [document.getElementById("muteBtn"), document.getElementById("muteBtnTouch")].filter(Boolean);
-    btns.forEach(btn => btn.textContent = sfxMuted ? "🔇" : "🔊");
+    btns.forEach(btn => btn.textContent = radioMuted ? "🔇" : "🔊");
   }
   bindButton(getEl("muteBtn"), toggleMute);
   
@@ -917,10 +885,11 @@ window.onload = function() {
   if(document.getElementById("speedSelect")) document.getElementById("speedSelect").onchange = (e) => changeSpeed(e.target);
   if(document.getElementById("speedSelectTouch")) document.getElementById("speedSelectTouch").onchange = (e) => changeSpeed(e.target);
 
+  // Reinstated Radio function logic
   function toggleRadio() {
     const btns = [document.getElementById("toggleRadio"), document.getElementById("toggleRadioTouch")].filter(Boolean);
     if (radio.paused) {
-      radio.play();
+      radio.play().catch(e => console.error("Radio play failed:", e)); // Use .catch for better browser compliance
       btns.forEach(btn => btn.textContent = "Radio OFF");
     } else {
       radio.pause();

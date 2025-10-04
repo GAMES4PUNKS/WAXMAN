@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>BRADMAN – The Infinite Chase</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght=500&display=swap" rel="stylesheet">
   <style>
     /* ---------------------------------------------------------------------- */
     /* BASE TEMPLATE STYLES - MAINTAINED FROM SPACERUN3008 */
@@ -201,7 +201,7 @@
       width: 100%;
       justify-content: center;
       align-items: center;
-      margin: 0.5em 0 0.2em 0; /* Further reduced margins */
+      margin: 0.5em 0 0.2em 0; /* Adjusted margins */
     }
     .show-dpad #dpad-area {
       display: flex;
@@ -420,6 +420,7 @@ window.onload = function() {
               const nc = c + dc;
 
               if (nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS) {
+                  // Only count true, permanent walls
                   if (currentMap[nr][nc] === 0) {
                       wallCount++;
                   }
@@ -437,8 +438,14 @@ window.onload = function() {
     for (let r = 0; r < GRID_ROWS; r++) {
         newMap[r] = new Array(GRID_COLS).fill(0); 
     }
+    // Set ALL inner cells (excluding the perimeter) to wall (0)
+    for (let r = 1; r < GRID_ROWS - 1; r++) {
+        for (let c = 1; c < GRID_COLS - 1; c++) {
+            newMap[r][c] = 0; 
+        }
+    }
 
-    // CRITICAL CHANGE: Clear the outer path (row/col 1 to N-2) to be dots (2)
+    // CRITICAL FIX: Clear the outer path (row/col 1 to N-2) to be dots (2)
     // This creates the safe, clear running lane, ensuring no double-blocks in this ring.
     for (let i = 1; i < GRID_COLS - 1; i++) {
         newMap[1][i] = 2; // Top
@@ -450,6 +457,7 @@ window.onload = function() {
     }
 
     // 2. Modified Recursive Backtracker Maze Generation
+    // We carve the maze walls (0) into paths (1) starting INSIDE the clear loop.
     let visited = [];
     for(let r = 0; r < GRID_ROWS; r++) visited[r] = new Array(GRID_COLS).fill(0);
     
@@ -462,8 +470,8 @@ window.onload = function() {
     let startX = inner_min + (Math.floor(Math.random() * ((inner_max_col - inner_min) / 2 + 1)) * 2);
     let startY = inner_min + (Math.floor(Math.random() * ((inner_max_row - inner_min) / 2 + 1)) * 2);
 
-    if (startX < 3) startX = 3;
-    if (startY < 3) startY = 3;
+    if (startX < inner_min) startX = inner_min;
+    if (startY < inner_min) startY = inner_min;
     
     stack.push({x: startX, y: startY});
     visited[startY][startX] = 1;
@@ -478,6 +486,7 @@ window.onload = function() {
         for (const [dx, dy] of directions) {
             const nx = cx + dx;
             const ny = cy + dy;
+            // Carving bounds: [3..GRID_ROWS-4] for the ODD coordinate cells
             if (ny >= inner_min && ny <= inner_max_row && nx >= inner_min && nx <= inner_max_col && visited[ny][nx] === 0) {
                 unvisitedNeighbors.push({x: nx, y: ny, dx: dx, dy: dy});
             }
@@ -486,7 +495,7 @@ window.onload = function() {
         if (unvisitedNeighbors.length > 0) {
             const next = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
             
-            // Open the wall (0) to a path (1) on the EVEN coordinate between them
+            // Wall cell (0) is opened to a path (1) on the EVEN coordinate between them
             newMap[cy + next.dy / 2][cx + next.dx / 2] = 1; 
             
             stack.push(next);
@@ -512,11 +521,12 @@ window.onload = function() {
     const connectionPoints = [];
     
     // Check the wall cells that separate the inner maze from the outer loop (at r/c 2 and N-3)
-    for (let c = 3; c < GRID_COLS - 3; c += 2) { // Only check odd columns (potential path points)
+    // NOTE: Inner walls are at EVEN indices (2, 4, 6, etc.) but we need to check the cells adjacent to the outer loop.
+    for (let c = 2; c < GRID_COLS - 2; c += 2) { // Check EVEN columns (potential wall blocks)
         if (newMap[2][c] === 0) connectionPoints.push({r: 2, c: c});
         if (newMap[GRID_ROWS - 3][c] === 0) connectionPoints.push({r: GRID_ROWS - 3, c: c});
     }
-    for (let r = 3; r < GRID_ROWS - 3; r += 2) { // Only check odd rows
+    for (let r = 2; r < GRID_ROWS - 2; r += 2) { // Check EVEN rows
         if (newMap[r][2] === 0) connectionPoints.push({r: r, c: 2});
         if (newMap[r][GRID_COLS - 3] === 0) connectionPoints.push({r: r, c: GRID_COLS - 3});
     }
@@ -526,7 +536,14 @@ window.onload = function() {
     const numToOpen = Math.min(connectionPoints.length, 8); 
 
     for (let i = 0; i < numToOpen; i++) {
-        newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; // Open wall to dot (2)
+        // Open wall to dot (2)
+        newMap[connectionPoints[i].r][connectionPoints[i].c] = 2; 
+        
+        // Also clear the DOT immediately next to it on the outer ring to ensure flow (2 -> 1)
+        if (connectionPoints[i].r === 2) newMap[1][connectionPoints[i].c] = 1;
+        if (connectionPoints[i].r === GRID_ROWS - 3) newMap[GRID_ROWS - 2][connectionPoints[i].c] = 1;
+        if (connectionPoints[i].c === 2) newMap[connectionPoints[i].r][1] = 1;
+        if (connectionPoints[i].c === GRID_COLS - 3) newMap[connectionPoints[i].r][GRID_COLS - 2] = 1;
     }
 
     // C. ENFORCE DOT DENSITY RULE (Remove dots surrounded by too many walls)
@@ -597,9 +614,10 @@ window.onload = function() {
     }
   }
 
-  // --- Bradman, Ghost Movement, Game Loop, Draw, LevelUp, and GameOver Functions (Unchanged) ---
+  // --- Bradman Movement Logic (FIXED for instant reversal) ---
   
   function moveBradman() {
+    // 1. Check if the NEXT (pending) move is valid.
     const newX_tentative = bradman.x + bradman.next_dx;
     const newY_tentative = bradman.y + bradman.next_dy;
     
@@ -607,10 +625,14 @@ window.onload = function() {
         newX_tentative >= 0 && newX_tentative < GRID_COLS &&
         map[newY_tentative][newX_tentative] !== 0) 
     {
+        // If the pending move is valid, commit it to the current direction
         bradman.dx = bradman.next_dx;
         bradman.dy = bradman.next_dy;
     }
-    
+    // NOTE: The key fix is that we ALLOW the direction to be set even if it's 180 degrees opposite, 
+    // as long as the path is clear (which is true if it's not a wall).
+
+    // 2. Execute the CURRENT direction move.
     const targetX = bradman.x + bradman.dx;
     const targetY = bradman.y + bradman.dy;
 
@@ -622,6 +644,7 @@ window.onload = function() {
         bradman.y = targetY;
         return true;
     }
+    // Stop movement if blocked
     bradman.dx = 0;
     bradman.dy = 0;
     return false;
@@ -878,15 +901,11 @@ window.onload = function() {
   }
   
   function setDirection(newDir) {
-    if (
-      (newDir.x !== -bradman.dx || bradman.dx === 0) &&
-      (newDir.y !== -bradman.dy || bradman.dy === 0)
-    ) {
-      bradman.next_dx = newDir.x;
-      bradman.next_dy = newDir.y;
-      started = true;
-      if (!paused && !gameOverFlag) hideOverlay();
-    }
+    // NOTE: In Pac-Man, the next_dx/dy should be set regardless of the current dx/dy (allowing instant 180s)
+    bradman.next_dx = newDir.x;
+    bradman.next_dy = newDir.y;
+    started = true;
+    if (!paused && !gameOverFlag) hideOverlay();
   }
   
   bindButton(getEl("loginBtn"), () => { loginPopup.style.display = "block"; });

@@ -426,26 +426,23 @@ window.onload = function() {
     }
 
     // 2. Modified Recursive Backtracker Maze Generation
-    // We now place walls (0) on even coordinates, separated by paths.
-    
-    // A temporary grid to track visited path cells (1=visited, 0=unvisited)
     let visited = [];
     for(let r = 0; r < GRID_ROWS; r++) visited[r] = new Array(GRID_COLS).fill(0);
     
-    // Stacks for maze generation
     let stack = [];
+    // Only carve starting from an ODD coordinate (1, 3, 5, etc.)
     let startX = 1 + (Math.floor(Math.random() * (GRID_COLS / 2 - 1)) * 2);
     let startY = 1 + (Math.floor(Math.random() * (GRID_ROWS / 2 - 1)) * 2);
     stack.push({x: startX, y: startY});
     visited[startY][startX] = 1;
+    newMap[startY][startX] = 1; // Start cell is empty path (1)
 
-    const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]];
-    
+    const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]]; // Move 2 steps
+
     while (stack.length > 0) {
         let {x: cx, y: cy} = stack[stack.length - 1];
         let unvisitedNeighbors = [];
         
-        // Find unvisited neighbors 2 blocks away
         for (const [dx, dy] of directions) {
             const nx = cx + dx;
             const ny = cy + dy;
@@ -455,40 +452,43 @@ window.onload = function() {
         }
         
         if (unvisitedNeighbors.length > 0) {
-            // Pick a random neighbor
             const next = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
             
-            // Place a wall (0) exactly one block away, on the even coordinate
-            newMap[cy + next.dy / 2][cx + next.dx / 2] = 0;
+            // Place a wall (0) on the EVEN coordinate between the two ODD coordinates
+            newMap[cy + next.dy / 2][cx + next.dx / 2] = 0; 
             
-            // Move to the new cell (odd coordinate)
+            // Move to the new cell (ODD coordinate)
             stack.push(next);
             visited[next.y][next.x] = 1;
+            newMap[next.y][next.x] = 1; // Mark new cell as empty path (1)
         } else {
             stack.pop();
         }
     }
     
-    // 3. Place Power Pellets (3) and ensure player start area is clear (1)
+    // 3. Finalize: Fill all remaining uncarved path cells (2) with dots (2) and clear start/pellets.
+    // NOTE: Cells set to 1 by the algorithm are empty paths (already passed). All other inner non-wall cells remain 2.
+    
+    // Place Power Pellets (3) in corners
     newMap[1][GRID_COLS - 2] = 3;
     newMap[GRID_ROWS - 2][1] = 3;
     newMap[GRID_ROWS - 2][GRID_COLS - 2] = 3;
     
     // Ensure player start area is clear (just path - 1)
     newMap[bradman.y][bradman.x] = 1;
-    newMap[bradman.y][bradman.x+1] = 1; // Clear next tile horizontally
-    newMap[bradman.y+1][bradman.x] = 1; // Clear next tile vertically
+    newMap[bradman.y][bradman.x+1] = 1; 
+    newMap[bradman.y+1][bradman.x] = 1;
     
     return newMap;
   }
 
-  /** Sets up the ghosts based on the current level, increasing speed. */
-  function setupGhosts(currentLevel) {
+  /** Sets up the ghosts based on the current map. */
+  function setupGhosts() {
     ghosts = [];
     const baseGhosts = 2;
     const maxGhosts = 6;
-    const numGhosts = Math.min(baseGhosts + Math.floor((currentLevel - 1) / 2), maxGhosts); 
-    const ghostSpeedFactor = 1 + (currentLevel * 0.1); 
+    const numGhosts = Math.min(baseGhosts + Math.floor((level - 1) / 2), maxGhosts); 
+    const ghostSpeedFactor = 1 + (level * 0.1); 
 
     for (let i = 0; i < numGhosts; i++) {
         let gx, gy;
@@ -501,8 +501,8 @@ window.onload = function() {
             gy = GRID_ROWS - 2 - (i % 2);
         }
         
-        // Ensure ghost starts on a path (not wall)
-        while(newMap[gy][gx] === 0) {
+        // CRITICAL FIX: Ensure ghost starts on a path (not wall) by checking the global 'map'
+        while(map[gy] && map[gy][gx] === 0) {
             gx = Math.floor(Math.random() * (GRID_COLS - 2)) + 1;
             gy = Math.floor(Math.random() * (GRID_ROWS - 2)) + 1;
         }
@@ -520,7 +520,8 @@ window.onload = function() {
     }
   }
 
-  /** Moves Bradman based on the pending direction, checking for walls. */
+  // --- Bradman, Ghost Movement, Game Loop, Draw, LevelUp, and GameOver Functions (Unchanged) ---
+  
   function moveBradman() {
     const newX_tentative = bradman.x + bradman.next_dx;
     const newY_tentative = bradman.y + bradman.next_dy;
@@ -549,7 +550,6 @@ window.onload = function() {
     return false;
   }
   
-  /** Simple ghost AI: Tries to move towards Bradman/away from Bradman, checking for walls. */
   function moveGhosts() {
     ghosts.forEach(ghost => {
         if (Math.random() > (1 / ghost.speed)) return;
@@ -567,7 +567,6 @@ window.onload = function() {
         
         let potentialDirs = [];
 
-        // 1. Check priority directions
         if (targetX_dir !== 0 && map[ghost.y] && map[ghost.y][ghost.x + targetX_dir] !== 0) {
             potentialDirs.push({x: targetX_dir, y: 0});
         }
@@ -575,7 +574,6 @@ window.onload = function() {
             potentialDirs.push({x: 0, y: targetY_dir});
         }
         
-        // 2. Add other valid, non-reverse moves (Perpendiculars)
         const perpendiculars = [
             {x: 1, y: 0}, {x: -1, y: 0}, {x: 0, y: 1}, {x: 0, y: -1}
         ].filter(dir => 
@@ -585,8 +583,8 @@ window.onload = function() {
         );
 
         const allValidMoves = [...potentialDirs, ...perpendiculars]
-                                .filter((v, i, a) => a.findIndex(t => (t.x === v.x && t.y === v.y)) === i) // Deduplicate
-                                .sort(() => Math.random() - 0.5); // Shuffle for semi-random AI
+                                .filter((v, i, a) => a.findIndex(t => (t.x === v.x && t.y === v.y)) === i)
+                                .sort(() => Math.random() - 0.5); 
         
         if (allValidMoves.length > 0) {
             const move = allValidMoves[0];
@@ -598,16 +596,11 @@ window.onload = function() {
     });
   }
 
-
-  // --- Game Loop and Flow ---
-
   function BradmanGameLoop() {
     if (!started || gameOverFlag || paused) return;
 
-    // 1. Bradman Movement
     moveBradman();
 
-    // 2. Ghost Movement & Scared Timer Update
     moveGhosts(); 
     ghosts.forEach(ghost => {
         if (ghost.scaredTimer > 0) {
@@ -616,7 +609,6 @@ window.onload = function() {
         }
     });
 
-    // 3. Collect Dots/Pellets
     let tileType = map[bradman.y][bradman.x];
     if (tileType === 2) {
         map[bradman.y][bradman.x] = 1; // Clear dot
@@ -624,19 +616,16 @@ window.onload = function() {
     } else if (tileType === 3) { // Power Pellet
         map[bradman.y][bradman.x] = 1; // Clear pellet
         score += 50;
-        // Scare ghosts!
         ghosts.forEach(g => {
             g.scared = true;
             g.scaredTimer = 200; // ~20 seconds
         });
     }
 
-    // 4. Ghost Interactions
     ghosts.forEach((ghost) => {
         if (bradman.x === ghost.x && bradman.y === ghost.y) {
             if (ghost.scared) {
                 score += 200;
-                // Move ghost back to a fixed starting point (respawn)
                 ghost.x = GRID_COLS - 2;
                 ghost.y = 1;
                 ghost.scared = false;
@@ -649,28 +638,23 @@ window.onload = function() {
         }
     });
     
-    // 5. Check Level Completion
     let remainingDots = map.flat().filter(t => t === 2 || t === 3).length;
     if (remainingDots === 0) {
         levelUp();
         return;
     }
 
-    // 6. Update HUD and Draw
     updateHud();
     draw();
   }
 
-  /** Draws the game state to the canvas using emojis. */
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Set font style once for drawing all elements
     ctx.font = `${TILE_SIZE}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // 1. Draw the Map (Walls, Dots, Pellets)
     for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
             const screenX = c * TILE_SIZE;
@@ -684,20 +668,18 @@ window.onload = function() {
                 ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
             } else if (map[r][c] === 3) { // Power Pellet
                 ctx.font = `${TILE_SIZE}px sans-serif`;
-                ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 150)); // Flashing effect
+                ctx.globalAlpha = Math.abs(Math.sin(Date.now() / 150)); 
                 ctx.fillText(DOT_EMOJI, screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
             }
             ctx.restore();
         }
     }
 
-    // 2. Draw Bradman
     ctx.font = `${TILE_SIZE}px sans-serif`;
     ctx.fillText(BRADMAN_EMOJI, 
                  (bradman.x + 0.5) * TILE_SIZE, 
                  (bradman.y + 0.5) * TILE_SIZE);
 
-    // 3. Draw Ghosts
     ghosts.forEach(ghost => {
         let emoji = ghost.emoji;
         if (ghost.scared) {
@@ -726,7 +708,6 @@ window.onload = function() {
       localStorage.setItem('bradman_highscore', highScore);
     }
     
-    // Reset Bradman and set up new map/ghosts
     bradman.x = 1;
     bradman.y = 1;
     bradman.dx = 0;
@@ -735,38 +716,46 @@ window.onload = function() {
     bradman.next_dy = 0;
     
     map = generateMap(level);
-    setupGhosts(level);
+    setupGhosts(); // No level argument needed, uses global 'level'
     updateHud();
   }
 
   function resetGame() {
-    level = 1;
-    score = 0;
-    bradman = { x: 1, y: 1, dx: 0, dy: 0, next_dx: 0, next_dy: 0 };
-    gameOverFlag = false;
-    paused = false; 
-    started = false;
+    try {
+        level = 1;
+        score = 0;
+        bradman = { x: 1, y: 1, dx: 0, dy: 0, next_dx: 0, next_dy: 0 };
+        gameOverFlag = false;
+        paused = false; 
+        started = false;
 
-    updateHud();
-    gameStatusLine.style.display = "none";
-    if (isTouchDevice()) {
-      statusBarRow1.style.display = "flex";
-      statusBarRow2.style.display = "flex";
-    } else {
-      statusBarCombined.style.display = "flex";
+        updateHud();
+        gameStatusLine.style.display = "none";
+        
+        // Restore UI visibility
+        if (isTouchDevice()) {
+            statusBarRow1.style.display = "flex";
+            statusBarRow2.style.display = "flex";
+        } else {
+            statusBarCombined.style.display = "flex";
+        }
+        hideOverlay();
+        clearInterval(gameInterval);
+        
+        // CRITICAL: Generate map before setting up ghosts
+        map = generateMap(level);
+        setupGhosts(); 
+        
+        const currentSpeedOption = getEl("speedSelect").value;
+        speed = Number(currentSpeedOption);
+        gameInterval = setInterval(BradmanGameLoop, speed);
+        
+        draw();
+        setTimeout(() => canvas.focus(), 100);
+    } catch (e) {
+        console.error("Game failed to initialize:", e);
+        alert("Game failed to load. Check console for details.");
     }
-    hideOverlay();
-    clearInterval(gameInterval);
-    
-    map = generateMap(level);
-    setupGhosts(level);
-    
-    const currentSpeedOption = getEl("speedSelect").value;
-    speed = Number(currentSpeedOption);
-    gameInterval = setInterval(BradmanGameLoop, speed);
-    
-    draw();
-    setTimeout(() => canvas.focus(), 100);
   }
 
   function gameOver() {
@@ -790,7 +779,7 @@ window.onload = function() {
     showOverlay("GAME OVER");
     setTimeout(hideOverlay, 1800);
   }
-
+  
   // --- UI/Control Handlers (Retained from base template) ---
 
   function updateHud() {
@@ -813,7 +802,6 @@ window.onload = function() {
     lastOverlayMsg = "";
   }
   
-  // Set direction for the *next* move
   function setDirection(newDir) {
     if (
       (newDir.x !== -bradman.dx || bradman.dx === 0) &&
@@ -826,14 +814,12 @@ window.onload = function() {
     }
   }
   
-  // Login popup logic
   bindButton(getEl("loginBtn"), () => { loginPopup.style.display = "block"; });
   document.getElementById("closeLoginPopup").onclick = () => { loginPopup.style.display = "none"; }
   window.addEventListener('keydown', function(e) {
     if (e.key === "Escape") loginPopup.style.display = "none";
   });
   
-  // Keyboard Input
   document.addEventListener("keydown", e => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(e.key)) {
       e.preventDefault(); 
@@ -851,7 +837,6 @@ window.onload = function() {
     }
   });
 
-  // Touch Swipe Input (kept from original)
   let touchStartX, touchStartY;
   canvas.addEventListener('touchstart', function(e) {
     if (e.touches.length === 1) {
@@ -873,7 +858,6 @@ window.onload = function() {
     touchStartX = touchStartY = undefined;
   });
 
-  // D-pad (touch) event bindings 
   const upBtn = document.getElementById("upBtn");
   const downBtn = document.getElementById("downBtn");
   const leftBtn = document.getElementById("leftBtn");
@@ -882,8 +866,6 @@ window.onload = function() {
   if(downBtn) downBtn.onclick = e => setDirection({ x: 0, y: 1 });
   if(leftBtn) leftBtn.onclick = e => setDirection({ x: -1, y: 0 });
   if(rightBtn) rightBtn.onclick = e => setDirection({ x: 1, y: 0 });
-  
-  // --- Button Handlers (Shared Logic) ---
   
   function bindButton(btn, clickFn) {
     if (btn) btn.onclick = clickFn;
@@ -906,7 +888,6 @@ window.onload = function() {
   bindButton(getEl("pauseBtn"), togglePause);
   document.getElementById("restartBtn").onclick = resetGame;
   
-  // Mute
   function toggleMute() {
     sfxMuted = !sfxMuted;
     const btns = [document.getElementById("muteBtn"), document.getElementById("muteBtnTouch")].filter(Boolean);
@@ -914,14 +895,12 @@ window.onload = function() {
   }
   bindButton(getEl("muteBtn"), toggleMute);
   
-  // Speed
   function changeSpeed(selectEl) {
     speed = Number(selectEl.value);
     clearInterval(gameInterval);
     if (!paused && !gameOverFlag) {
       gameInterval = setInterval(BradmanGameLoop, speed);
     }
-    // Sync the other select element
     document.getElementById("speedSelect").value = speed + '';
     if(document.getElementById("speedSelectTouch"))
         document.getElementById("speedSelectTouch").value = speed + '';
@@ -929,7 +908,6 @@ window.onload = function() {
   if(document.getElementById("speedSelect")) document.getElementById("speedSelect").onchange = (e) => changeSpeed(e.target);
   if(document.getElementById("speedSelectTouch")) document.getElementById("speedSelectTouch").onchange = (e) => changeSpeed(e.target);
 
-  // Radio
   function toggleRadio() {
     const btns = [document.getElementById("toggleRadio"), document.getElementById("toggleRadioTouch")].filter(Boolean);
     if (radio.paused) {
@@ -956,6 +934,7 @@ window.onload = function() {
     if (paused && lastOverlayMsg !== "PAUSED") showOverlay("PAUSED");
   });
   
+  // Ensure we call resetGame to start the map generation and loop
   updateHud();
   resetGame();
 }

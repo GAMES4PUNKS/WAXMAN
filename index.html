@@ -632,27 +632,33 @@ window.onload = function() {
     moveGhosts(); 
     
     let currentlyScared = false;
+    let timerSoundShouldLoop = false;
+    
     ghosts.forEach(ghost => {
         if (ghost.scaredTimer > 0) {
             ghost.scaredTimer--;
             currentlyScared = true;
+            timerSoundShouldLoop = true; // Timer sound should loop if any ghost is currently scared
             
-            // Activate timerOverSound 10 seconds before power pill runs out
+            // Check for warning time
             if (ghost.scaredTimer === SCARY_WARNING_TIME) {
-                 stopSound(timerSound); // Stop the main timer sound
-                 playSound(timerOverSound); // Start the warning sound
+                 stopSound(timerSound); 
+                 playSound(timerOverSound); 
             }
             if (ghost.scaredTimer === 0) {
                 ghost.scared = false;
-                stopSound(timerOverSound); // Stop the warning sound
+                stopSound(timerOverSound); 
             }
         }
     });
     
-    // Check if the main timer sound should be playing
-    if (currentlyScared && timerSound.paused && timerOverSound.paused) {
-        // If the game is in the main scary phase and no warning is playing, restart the main loop sound.
+    // Check if the main timer sound should be playing (and isn't the warning)
+    if (timerSoundShouldLoop && timerSound.paused && timerOverSound.paused) {
+        // Only restart if the loop timer hasn't finished entirely AND the warning isn't running
         playSound(timerSound, true); 
+    } else if (!timerSoundShouldLoop && !timerSound.paused) {
+        // If no ghost is scared but the timer sound is playing (and it's not the warning), stop it
+        stopSound(timerSound);
     }
 
 
@@ -665,7 +671,6 @@ window.onload = function() {
         map[bradman.y][bradman.x] = 1; // Clear pellet
         score += 50;
         
-        // ACTIVATE PILL SOUND
         playSound(pillSound);
         
         // ACTIVATE SCARY MODE
@@ -676,7 +681,7 @@ window.onload = function() {
         });
         
         // Start the main power pellet timer sound
-        stopSound(timerOverSound); // Stop warning if running (shouldn't be possible)
+        stopSound(timerOverSound); 
         playSound(timerSound, true); 
     }
 
@@ -685,7 +690,7 @@ window.onload = function() {
         if (bradman.x === ghost.x && bradman.y === ghost.y) {
             if (ghost.scared) {
                 // EAT GHOST
-                playSound(eatenSound); // Play eaten sound
+                playSound(eatenSound); 
                 score += 200;
                 
                 // Respawn ghost at center and keep SCARY status
